@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Protocol, runtime_checkable
 
 import numpy as np
 
@@ -25,6 +25,24 @@ class TranscriptSegment:
     lang: str  # detected language code
     start: float  # seconds
     end: float  # seconds
+
+
+@runtime_checkable
+class ASRProvider(Protocol):
+    """Protocol for ASR engines (local or remote)."""
+
+    @property
+    def is_loaded(self) -> bool: ...
+
+    def set_language(self, language: str) -> None: ...
+
+    def transcribe_segment(
+        self,
+        audio: np.ndarray,
+        source: str,
+        start_time: float,
+        end_time: float,
+    ) -> Optional[TranscriptSegment]: ...
 
 
 class ASREngine:

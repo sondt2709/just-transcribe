@@ -1,6 +1,6 @@
 {
   "name": "just-transcribe",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Real-time audio transcription and translation for macOS",
   "main": "./out/main/index.js",
   "scripts": {

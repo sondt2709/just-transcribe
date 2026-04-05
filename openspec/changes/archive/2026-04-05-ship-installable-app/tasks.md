@@ -20,4 +20,4 @@
 ## 5. Build & Test
 
 - [x] 5.1 Run `npm run build && npx electron-builder --mac` to produce DMG
-- [ ] 5.2 Clean install test: delete `~/.just-transcribe` and `~/Library/Application Support/just-transcribe`, install from DMG, verify setup flow
+- [x] 5.2 Clean install test: delete `~/.just-transcribe` and `~/Library/Application Support/just-transcribe`, install from DMG, verify setup flow

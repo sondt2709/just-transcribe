@@ -37,8 +37,11 @@ class AppConfig:
     llm_api_base: str = ""
     llm_model: str = ""
     llm_api_key: str = ""
+    asr_provider: str = "local"  # "local" or "remote"
     asr_model: str = DEFAULT_ASR_MODEL
     asr_language: str = ""  # empty = auto-detect, or ISO code like "vi", "en", "zh"
+    asr_base_url: str = ""  # remote ASR server URL
+    asr_api_key: str = ""  # remote ASR API key
 
     def to_dict(self) -> dict:
         return {
@@ -48,8 +51,11 @@ class AppConfig:
             "llm_api_base": self.llm_api_base,
             "llm_model": self.llm_model,
             "llm_api_key": self.llm_api_key,
+            "asr_provider": self.asr_provider,
             "asr_model": self.asr_model,
             "asr_language": self.asr_language,
+            "asr_base_url": self.asr_base_url,
+            "asr_api_key": self.asr_api_key,
         }
 
     @classmethod
@@ -61,8 +67,11 @@ class AppConfig:
             llm_api_base=data.get("llm_api_base", ""),
             llm_model=data.get("llm_model", ""),
             llm_api_key=data.get("llm_api_key", ""),
+            asr_provider=data.get("asr_provider", "local"),
             asr_model=data.get("asr_model", DEFAULT_ASR_MODEL),
             asr_language=data.get("asr_language", ""),
+            asr_base_url=data.get("asr_base_url", ""),
+            asr_api_key=data.get("asr_api_key", ""),
         )
 
 

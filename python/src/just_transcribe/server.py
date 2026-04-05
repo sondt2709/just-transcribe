@@ -15,7 +15,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from just_transcribe.audio.stream import AudioStreamManager
 from just_transcribe.config import AppConfig, load_config, save_config
-from just_transcribe.pipeline.asr import ASREngine, TranscriptSegment
+from just_transcribe.pipeline.asr import ASREngine, ASRProvider, TranscriptSegment
+from just_transcribe.pipeline.asr_remote import RemoteASREngine, test_connection
 from just_transcribe.pipeline.orchestrator import PipelineOrchestrator
 from just_transcribe.pipeline.translate import TranslationResult, TranslationService
 from just_transcribe.pipeline.vad import VoiceActivityDetector
@@ -34,7 +35,7 @@ class AppState:
 
         # Components (initialized lazily)
         self.vad: Optional[VoiceActivityDetector] = None
-        self.asr: Optional[ASREngine] = None
+        self.asr: Optional[ASRProvider] = None
         self.translator: Optional[TranslationService] = None
         self.stream_manager: Optional[AudioStreamManager] = None
         self.orchestrator: Optional[PipelineOrchestrator] = None
@@ -65,6 +66,22 @@ def create_app(
 
     state = AppState(config=config, audiotee_path=audiotee_path)
 
+    def _create_asr_provider(cfg: AppConfig) -> ASRProvider:
+        """Create the appropriate ASR provider based on config."""
+        if cfg.asr_provider == "remote":
+            logger.info("Using remote ASR: %s model=%s", cfg.asr_base_url, cfg.asr_model)
+            return RemoteASREngine(
+                base_url=cfg.asr_base_url,
+                model=cfg.asr_model,
+                api_key=cfg.asr_api_key,
+                language=cfg.asr_language,
+            )
+        else:
+            logger.info("Using local ASR: %s", cfg.asr_model)
+            engine = ASREngine(model_name=cfg.asr_model, language=cfg.asr_language)
+            engine.load_model()
+            return engine
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         # Load models on startup
@@ -72,8 +89,7 @@ def create_app(
         state.vad = VoiceActivityDetector()
         state.vad.load_model()
 
-        state.asr = ASREngine(model_name=config.asr_model, language=config.asr_language)
-        state.asr.load_model()
+        state.asr = _create_asr_provider(config)
         state.model_loaded = True
 
         state.translator = TranslationService(
@@ -177,8 +193,44 @@ def create_app(
 
     @app.put("/api/config")
     async def update_config(body: dict):
-        state.config = AppConfig.from_dict(body)
+        new_config = AppConfig.from_dict(body)
+        provider_type_changed = new_config.asr_provider != state.config.asr_provider
+        asr_config_changed = (
+            provider_type_changed
+            or new_config.asr_base_url != state.config.asr_base_url
+            or new_config.asr_model != state.config.asr_model
+            or new_config.asr_api_key != state.config.asr_api_key
+        )
+
+        # Reject provider type switch while recording
+        if provider_type_changed and state.recording:
+            return {"status": "error", "message": "Stop recording before changing ASR provider"}
+
+        # Validate when switching provider type
+        if provider_type_changed:
+            if new_config.asr_provider == "remote":
+                if not new_config.asr_base_url:
+                    return {"status": "error", "message": "Remote ASR server URL is required"}
+                loop = asyncio.get_running_loop()
+                result = await loop.run_in_executor(
+                    None, test_connection, new_config.asr_base_url, new_config.asr_api_key
+                )
+                if not result["ok"]:
+                    return {"status": "error", "message": f"Remote ASR: {result['error']}"}
+                if new_config.asr_model and new_config.asr_model not in result.get("models", []):
+                    return {"status": "error", "message": f"Model '{new_config.asr_model}' not found on remote server"}
+            elif new_config.asr_provider == "local":
+                model_dir_name = new_config.asr_model.replace("/", "--")
+                model_path = Path.home() / ".cache" / "huggingface" / "hub" / f"models--{model_dir_name}"
+                if not model_path.exists():
+                    return {"status": "error", "message": f"Local model not found. Download with: hf download {new_config.asr_model}"}
+
+        state.config = new_config
         save_config(state.config)
+
+        # Re-initialize ASR provider if any ASR config changed
+        if asr_config_changed:
+            state.asr = _create_asr_provider(state.config)
 
         # Update ASR language hint live
         if state.asr:
@@ -194,6 +246,27 @@ def create_app(
             )
 
         return {"status": "ok"}
+
+    @app.post("/api/asr/test")
+    async def asr_test(body: dict):
+        url = body.get("url", "")
+        api_key = body.get("api_key", "")
+        if not url:
+            return {"ok": False, "error": "URL is required"}
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, test_connection, url, api_key)
+
+    @app.get("/api/asr/models")
+    async def asr_models():
+        if not state.config.asr_base_url:
+            return {"models": [], "error": "No remote ASR server configured"}
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(
+            None, test_connection, state.config.asr_base_url, state.config.asr_api_key
+        )
+        if result["ok"]:
+            return {"models": result.get("models", [])}
+        return {"models": [], "error": result.get("error", "Unknown error")}
 
     # --- WebSocket ---
 
@@ -230,6 +303,7 @@ def _on_interim(state: AppState, data: dict) -> None:
 
 
 def _on_segment(state: AppState, segment: TranscriptSegment) -> None:
+    logger.info("Segment: id=%d lang=%s text=%s", segment.id, segment.lang, segment.text[:50])
     state.broadcast(
         {
             "type": "segment",
@@ -245,6 +319,7 @@ def _on_segment(state: AppState, segment: TranscriptSegment) -> None:
 
 
 def _on_translation(state: AppState, result: TranslationResult) -> None:
+    logger.info("Translation result: segment_id=%d text=%s", result.segment_id, result.translated_text[:50])
     state.broadcast(
         {
             "type": "translate",

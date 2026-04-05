@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { startPythonBackend, stopPythonBackend, getBackendPort } from './python'
-import { checkSetupStatus, ensureAppDirectory, setupPythonSource, copyAudiotee, setupPythonEnv, setPythonDir, getPythonDir } from './setup'
+import { checkSetupStatus, ensureAppDirectory, setupPythonSource, copyAudiotee, setupPythonEnv, setPythonDir, getPythonDir, saveAsrProvider } from './setup'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -56,6 +56,29 @@ app.whenReady().then(async () => {
   // IPC: get setup status
   ipcMain.handle('get-setup-status', () => {
     return checkSetupStatus()
+  })
+
+  // IPC: save ASR provider choice
+  ipcMain.handle('save-asr-provider', (_event, provider: string) => {
+    saveAsrProvider(provider)
+    return { success: true }
+  })
+
+  // IPC: reinstall backend (uv sync + restart)
+  ipcMain.handle('reinstall-backend', async () => {
+    try {
+      stopPythonBackend()
+      // Wait for process to die
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+      setupPythonEnv()
+      const port = await startPythonBackend()
+      for (const win of BrowserWindow.getAllWindows()) {
+        win.webContents.send('backend-started', { port })
+      }
+      return { success: true, port }
+    } catch (err) {
+      return { success: false, error: String(err) }
+    }
   })
 
   // IPC: run setup

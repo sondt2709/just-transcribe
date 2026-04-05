@@ -5,6 +5,7 @@ import os from 'os'
 
 const APP_DIR = path.join(os.homedir(), '.just-transcribe')
 const BIN_DIR = path.join(APP_DIR, 'bin')
+const CONFIG_FILE = path.join(APP_DIR, 'config.toml')
 const HF_CACHE = path.join(os.homedir(), '.cache', 'huggingface', 'hub')
 
 // In dev mode, use python/ source dir directly (no copy)
@@ -62,6 +63,7 @@ export interface SetupStatus {
   pythonEnvReady: boolean
   audioteeReady: boolean
   modelsDownloaded: boolean
+  asrProvider: string // "local" | "remote" | "" (not yet chosen)
   ready: boolean
 }
 
@@ -81,6 +83,32 @@ function modelCached(modelId: string): boolean {
   return fs.existsSync(modelDir)
 }
 
+function readAsrProvider(): string {
+  try {
+    if (!fs.existsSync(CONFIG_FILE)) return ''
+    const content = fs.readFileSync(CONFIG_FILE, 'utf-8')
+    const match = content.match(/asr_provider\s*=\s*"([^"]*)"/)
+    return match ? match[1] : ''
+  } catch {
+    return ''
+  }
+}
+
+export function saveAsrProvider(provider: string): void {
+  fs.mkdirSync(APP_DIR, { recursive: true })
+  if (fs.existsSync(CONFIG_FILE)) {
+    let content = fs.readFileSync(CONFIG_FILE, 'utf-8')
+    if (content.includes('asr_provider')) {
+      content = content.replace(/asr_provider\s*=\s*"[^"]*"/, `asr_provider = "${provider}"`)
+    } else {
+      content += `\nasr_provider = "${provider}"\n`
+    }
+    fs.writeFileSync(CONFIG_FILE, content, 'utf-8')
+  } else {
+    fs.writeFileSync(CONFIG_FILE, `asr_provider = "${provider}"\n`, 'utf-8')
+  }
+}
+
 export function checkSetupStatus(): SetupStatus {
   const uvInstalled = commandExists('uv')
   const hfInstalled = commandExists('hf') || commandExists('huggingface-cli')
@@ -88,6 +116,19 @@ export function checkSetupStatus(): SetupStatus {
   const pythonEnvReady = fs.existsSync(path.join(PYTHON_DIR, '.venv'))
   const audioteeReady = fs.existsSync(path.join(BIN_DIR, 'audiotee'))
   const modelsDownloaded = modelCached('Qwen/Qwen3-ASR-1.7B')
+  const asrProvider = readAsrProvider()
+
+  // Ready condition depends on provider choice
+  let ready: boolean
+  if (asrProvider === 'remote') {
+    // Remote: no need for hf or local model
+    ready = uvInstalled && pythonEnvReady && audioteeReady
+  } else if (asrProvider === 'local') {
+    ready = uvInstalled && pythonEnvReady && audioteeReady && modelsDownloaded
+  } else {
+    // No provider chosen yet — not ready
+    ready = false
+  }
 
   return {
     uvInstalled,
@@ -96,7 +137,8 @@ export function checkSetupStatus(): SetupStatus {
     pythonEnvReady,
     audioteeReady,
     modelsDownloaded,
-    ready: uvInstalled && hfInstalled && pythonEnvReady && audioteeReady && modelsDownloaded
+    asrProvider,
+    ready
   }
 }
 

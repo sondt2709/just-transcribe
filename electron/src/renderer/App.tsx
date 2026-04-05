@@ -88,6 +88,7 @@ export default function App(): JSX.Element {
       {showSettings && (
         <Settings
           port={backend.port}
+          recording={backend.recording}
           onClose={() => setShowSettings(false)}
         />
       )}

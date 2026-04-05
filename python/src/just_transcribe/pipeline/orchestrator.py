@@ -8,7 +8,7 @@ import time
 from typing import Callable, Optional
 
 from just_transcribe.audio.stream import AudioChunk, AudioStreamManager
-from just_transcribe.pipeline.asr import ASREngine, TranscriptSegment
+from just_transcribe.pipeline.asr import ASRProvider, TranscriptSegment
 from just_transcribe.pipeline.translate import TranslationResult, TranslationService
 from just_transcribe.pipeline.vad import SpeechSegment, VoiceActivityDetector
 
@@ -40,7 +40,7 @@ class PipelineOrchestrator:
         self,
         stream_manager: AudioStreamManager,
         vad: VoiceActivityDetector,
-        asr: ASREngine,
+        asr: ASRProvider,
         translator: TranslationService,
     ):
         self._stream = stream_manager

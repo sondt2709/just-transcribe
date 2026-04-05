@@ -73,7 +73,10 @@ class TranslationService:
         # Normalize language comparison
         seg_lang = segment.lang.lower().split("-")[0] if segment.lang else ""
         pref_lang = self.preferred_language.lower().split("-")[0]
-        return seg_lang != pref_lang and seg_lang != "unknown"
+        # Translate if language differs OR is unknown (let LLM decide)
+        if seg_lang == pref_lang:
+            return False
+        return True
 
     async def translate(
         self, segment: TranscriptSegment

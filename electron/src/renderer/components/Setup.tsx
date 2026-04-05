@@ -11,6 +11,7 @@ interface SetupStatus {
   pythonEnvReady: boolean
   audioteeReady: boolean
   modelsDownloaded: boolean
+  asrProvider: string
   ready: boolean
 }
 
@@ -28,6 +29,11 @@ export function Setup({ onComplete }: SetupProps): JSX.Element {
   useEffect(() => {
     refresh()
   }, [])
+
+  const chooseProvider = async (provider: string): Promise<void> => {
+    await window.api.saveAsrProvider(provider)
+    refresh()
+  }
 
   const runSetup = async (): Promise<void> => {
     setRunning(true)
@@ -55,12 +61,19 @@ export function Setup({ onComplete }: SetupProps): JSX.Element {
     )
   }
 
-  const toolsReady = status.uvInstalled && status.hfInstalled
-  const modelReady = status.modelsDownloaded
-  const canRunSetup = toolsReady && modelReady
+  const isRemote = status.asrProvider === 'remote'
+  const isLocal = status.asrProvider === 'local'
+  const providerChosen = isRemote || isLocal
+
+  // Step readiness depends on provider
+  const toolsReady = isRemote
+    ? status.uvInstalled
+    : status.uvInstalled && status.hfInstalled
+  const modelReady = isRemote ? true : status.modelsDownloaded
+  const canRunSetup = providerChosen && toolsReady && modelReady
 
   // Determine current step
-  const currentStep = !toolsReady ? 1 : !modelReady ? 2 : 3
+  const currentStep = !providerChosen ? 1 : !toolsReady ? 2 : !modelReady ? 3 : 4
 
   return (
     <div className="h-screen flex items-center justify-center no-drag">
@@ -70,11 +83,48 @@ export function Setup({ onComplete }: SetupProps): JSX.Element {
           First-time setup — let's get everything ready.
         </p>
 
-        {/* Step 1: Prerequisites */}
+        {/* Step 1: Choose provider */}
         <StepSection
           step={1}
-          title="Install prerequisites"
+          title="Choose speech recognition mode"
           active={currentStep === 1}
+          done={providerChosen}
+        >
+          <div className="space-y-2">
+            <button
+              onClick={() => chooseProvider('local')}
+              className={`w-full text-left px-4 py-3 rounded-lg border transition-colors ${
+                isLocal
+                  ? 'bg-blue-500/10 border-blue-500/30 text-neutral-200'
+                  : 'bg-neutral-800/50 border-neutral-700 text-neutral-400 hover:text-neutral-200 hover:border-neutral-600'
+              }`}
+            >
+              <div className="text-sm font-medium">Local (on-device)</div>
+              <div className="text-xs text-neutral-500 mt-0.5">
+                Uses Apple Silicon GPU. Downloads ~3.5 GB model.
+              </div>
+            </button>
+            <button
+              onClick={() => chooseProvider('remote')}
+              className={`w-full text-left px-4 py-3 rounded-lg border transition-colors ${
+                isRemote
+                  ? 'bg-blue-500/10 border-blue-500/30 text-neutral-200'
+                  : 'bg-neutral-800/50 border-neutral-700 text-neutral-400 hover:text-neutral-200 hover:border-neutral-600'
+              }`}
+            >
+              <div className="text-sm font-medium">Remote Server</div>
+              <div className="text-xs text-neutral-500 mt-0.5">
+                Point to an ASR server on your network. No model download needed.
+              </div>
+            </button>
+          </div>
+        </StepSection>
+
+        {/* Step 2: Prerequisites */}
+        <StepSection
+          step={2}
+          title="Install prerequisites"
+          active={currentStep === 2}
           done={toolsReady}
         >
           <div className="space-y-3">
@@ -82,40 +132,56 @@ export function Setup({ onComplete }: SetupProps): JSX.Element {
             {!status.uvInstalled && (
               <CommandBlock command="curl -LsSf https://astral.sh/uv/install.sh | sh" />
             )}
-            <CheckItem label="huggingface-cli (model downloader)" ok={status.hfInstalled} />
-            {!status.hfInstalled && (
-              <div className="space-y-1">
-                <CommandBlock command="brew install huggingface-cli" />
-                <p className="text-xs text-neutral-500 pl-2">or: <code className="text-neutral-400">uv tool install huggingface-cli</code></p>
-              </div>
+            {isLocal && (
+              <>
+                <CheckItem label="huggingface-cli (model downloader)" ok={status.hfInstalled} />
+                {!status.hfInstalled && (
+                  <div className="space-y-1">
+                    <CommandBlock command="brew install huggingface-cli" />
+                    <p className="text-xs text-neutral-500 pl-2">or: <code className="text-neutral-400">uv tool install huggingface-cli</code></p>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </StepSection>
 
-        {/* Step 2: Model download */}
-        <StepSection
-          step={2}
-          title="Download ASR model"
-          active={currentStep === 2}
-          done={modelReady}
-        >
-          <CheckItem label="Qwen3-ASR 1.7B (~3.5 GB)" ok={status.modelsDownloaded} />
-          {!status.modelsDownloaded && (
-            <CommandBlock command="hf download Qwen/Qwen3-ASR-1.7B" />
-          )}
-        </StepSection>
+        {/* Step 3: Model download (local only) */}
+        {isLocal && (
+          <StepSection
+            step={3}
+            title="Download ASR model"
+            active={currentStep === 3}
+            done={modelReady}
+          >
+            <CheckItem label="Qwen3-ASR 1.7B (~3.5 GB)" ok={status.modelsDownloaded} />
+            {!status.modelsDownloaded && (
+              <div>
+                <CommandBlock command="hf download Qwen/Qwen3-ASR-1.7B" />
+                <p className="text-xs text-neutral-500 mt-1 pl-7">
+                  Or place the model in ~/.cache/huggingface/hub/ by any method.
+                </p>
+              </div>
+            )}
+          </StepSection>
+        )}
 
-        {/* Step 3: Environment setup */}
+        {/* Step 3 for remote / Step 4 for local: Environment setup */}
         <StepSection
-          step={3}
+          step={isRemote ? 3 : 4}
           title="Set up environment"
-          active={currentStep === 3}
+          active={currentStep === (isRemote ? 3 : 4)}
           done={status.ready}
         >
           <div className="space-y-2">
             <CheckItem label="Python environment" ok={status.pythonEnvReady} />
             <CheckItem label="audiotee binary" ok={status.audioteeReady} />
           </div>
+          {isRemote && (
+            <p className="text-xs text-neutral-500 mt-2">
+              Configure your remote server in Settings after setup.
+            </p>
+          )}
         </StepSection>
 
         {/* Error */}
