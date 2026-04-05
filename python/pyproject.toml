@@ -1,0 +1,28 @@
+[project]
+name = "just-transcribe"
+version = "0.1.0"
+description = "Real-time audio transcription and translation for macOS"
+requires-python = ">=3.11"
+dependencies = [
+    "mlx-qwen3-asr>=0.3.2",
+    "sounddevice>=0.5.3",
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "websockets>=11.0",
+    "numpy>=1.26.4",
+    "tomli>=2.0.0",
+    "tomli-w>=1.0.0",
+    "torch>=2.0.0",
+    "torchaudio>=2.0.0",
+    "httpx>=0.27.0",
+]
+
+[project.scripts]
+just-transcribe = "just_transcribe.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/just_transcribe"]

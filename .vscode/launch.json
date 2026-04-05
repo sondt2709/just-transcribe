@@ -1,0 +1,35 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Dev",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/electron",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["electron-vite", "dev"],
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "name": "Build",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/electron",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "build"],
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "name": "Build DMG",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/electron",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["electron-builder", "--mac"],
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    }
+  ]
+}

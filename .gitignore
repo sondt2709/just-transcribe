@@ -1,0 +1,28 @@
+.DS_Store
+.tmp/
+.omc/
+.opencode/
+.claude/
+
+# Dependencies
+node_modules/
+.venv/
+
+# Build output
+dist/
+out/
+*.dmg
+*.dmg.blockmap
+builder-debug.yml
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+
+# Environment
+.env
+.env.*
+
+# Lock files (platform-specific)
+uv.lock

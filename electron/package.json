@@ -1,0 +1,58 @@
+{
+  "name": "just-transcribe",
+  "version": "0.1.0",
+  "description": "Real-time audio transcription and translation for macOS",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "dependencies": {
+    "@electron-toolkit/preload": "^3.0.1",
+    "@electron-toolkit/utils": "^3.0.0"
+  },
+  "devDependencies": {
+    "@electron-toolkit/tsconfig": "^1.0.1",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "autoprefixer": "^10.4.20",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^2.3.0",
+    "postcss": "^8.4.47",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwindcss": "^3.4.13",
+    "typescript": "^5.6.0"
+  },
+  "build": {
+    "appId": "com.just-transcribe.app",
+    "productName": "Just Transcribe",
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": ["dmg"],
+      "entitlements": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Just Transcribe needs microphone access for real-time transcription.",
+        "NSAudioCaptureUsageDescription": "Just Transcribe needs to capture system audio for transcription."
+      },
+      "extraResources": [
+        {
+          "from": "resources/bin/audiotee",
+          "to": "bin/audiotee"
+        },
+        {
+          "from": "../python/src",
+          "to": "python/src"
+        },
+        {
+          "from": "../python/pyproject.toml",
+          "to": "python/pyproject.toml"
+        }
+      ]
+    }
+  }
+}
