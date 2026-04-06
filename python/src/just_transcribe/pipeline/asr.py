@@ -1,4 +1,4 @@
-"""ASR engine wrapping mlx-qwen3-asr Session."""
+"""ASR engine using mlx-audio for Apple Silicon optimized inference."""
 
 from __future__ import annotations
 
@@ -46,22 +46,22 @@ class ASRProvider(Protocol):
 
 
 class ASREngine:
-    """Single mlx-qwen3-asr Session processing both audio streams."""
+    """Local ASR engine using mlx-audio for Apple Silicon optimized inference."""
 
     def __init__(self, model_name: str = DEFAULT_ASR_MODEL, language: str = ""):
         self._model_name = model_name
         self._language = language or None  # None = auto-detect
-        self._session = None
+        self._model = None
         self._segment_counter = 0
         self._loaded = False
 
     def load_model(self) -> None:
         """Load the ASR model. Call once at startup."""
-        from mlx_qwen3_asr.session import Session
+        from mlx_audio.stt import load
 
         logger.info("Loading ASR model: %s", self._model_name)
         t0 = time.time()
-        self._session = Session(model=self._model_name)
+        self._model = load(self._model_name)
         self._loaded = True
         logger.info("ASR model loaded in %.1fs", time.time() - t0)
 
@@ -91,14 +91,11 @@ class ASREngine:
         Returns:
             TranscriptSegment with text, language, and metadata.
         """
-        if self._session is None:
+        if self._model is None:
             raise RuntimeError("ASR model not loaded. Call load_model() first.")
 
         try:
-            result = self._session.transcribe(
-                (audio, 16000),
-                language=self._language,
-            )
+            result = self._model.generate(audio, language=self._language)
 
             text = result.text.strip()
             if not text:
@@ -107,12 +104,18 @@ class ASREngine:
             self._segment_counter += 1
             speaker = "You" if source == "mic" else "Others"
 
+            # mlx-audio returns language as a list, extract first element
+            lang = result.language
+            if isinstance(lang, list):
+                lang = lang[0] if lang else "unknown"
+            lang = str(lang) if lang and str(lang) != "None" else "unknown"
+
             return TranscriptSegment(
                 id=self._segment_counter,
                 text=text,
                 source=source,
                 speaker=speaker,
-                lang=result.language or "unknown",
+                lang=lang,
                 start=start_time,
                 end=end_time,
             )

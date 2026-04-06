@@ -8,7 +8,7 @@ Real-time audio transcription and translation for macOS. Captures your microphon
 |---|---|
 | Desktop app | Electron + React + TypeScript + Tailwind CSS |
 | Backend | Python + FastAPI + WebSocket |
-| Speech-to-text | [Qwen3-ASR 1.7B](https://huggingface.co/Qwen/Qwen3-ASR-1.7B) (runs locally via MLX) |
+| Speech-to-text | [Qwen3-ASR 1.7B 8-bit](https://huggingface.co/mlx-community/Qwen3-ASR-1.7B-8bit) (runs locally via [mlx-audio](https://github.com/Blaizzy/mlx-audio)) |
 | Translation | Any OpenAI-compatible LLM API |
 | Audio capture | Custom `audiotee` binary (mic + system audio) |
 | Package manager | [uv](https://docs.astral.sh/uv/) (Python) |
@@ -45,10 +45,10 @@ brew install huggingface-cli
 Still in Terminal, run:
 
 ```sh
-hf download Qwen/Qwen3-ASR-1.7B
+hf download mlx-community/Qwen3-ASR-1.7B-8bit
 ```
 
-This downloads ~3.5 GB. It only needs to happen once.
+This downloads ~1.8 GB. It only needs to happen once.
 
 ### Step 4: Launch and set up
 
@@ -60,7 +60,7 @@ That's it — you're ready to transcribe!
 
 - **Real-time transcription** — speech to text as you speak
 - **Dual audio capture** — microphone + system audio (hear what others say in calls)
-- **Local AI** — runs Qwen3-ASR on your Mac, no cloud needed for transcription
+- **Local AI** — runs Qwen3-ASR (8-bit quantized) on your Mac via mlx-audio, no cloud needed
 - **Translation** — optionally translate to your preferred language via LLM API
 - **Multi-language** — supports English, Vietnamese, Chinese, Japanese, Korean, and more
 
@@ -86,8 +86,8 @@ rm -rf /Applications/Just\ Transcribe.app
 rm -rf ~/.just-transcribe
 rm -rf ~/Library/Application\ Support/just-transcribe
 
-# Remove the AI model (~3.5 GB)
-rm -rf ~/.cache/huggingface/hub/models--Qwen--Qwen3-ASR-1.7B
+# Remove the AI model (~1.8 GB)
+rm -rf ~/.cache/huggingface/hub/models--mlx-community--Qwen3-ASR-1.7B-8bit
 ```
 
 ## Development

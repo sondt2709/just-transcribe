@@ -1,19 +1,4 @@
-## ADDED Requirements
-
-### Requirement: VAD filtering
-The system SHALL apply Silero VAD to each audio stream independently to detect speech segments. Only audio segments containing speech SHALL be forwarded to the ASR engine. The VAD SHALL use a speech threshold of 0.5 and minimum speech duration of 250ms.
-
-#### Scenario: Speech detected in audio chunk
-- **WHEN** VAD detects speech probability above threshold in an audio chunk
-- **THEN** the chunk SHALL be buffered and included in the current speech segment
-
-#### Scenario: Silence detected after speech
-- **WHEN** VAD detects silence lasting longer than the configured minimum silence duration (2.0s) after a speech segment
-- **THEN** the buffered speech segment SHALL be finalized and submitted to the ASR queue
-
-#### Scenario: No speech in audio
-- **WHEN** an audio chunk contains no speech above threshold
-- **THEN** the chunk SHALL be discarded without forwarding to ASR
+## MODIFIED Requirements
 
 ### Requirement: Single-model ASR with streaming
 The system SHALL use a pluggable ASR provider to transcribe all audio. The provider SHALL implement the ASRProvider protocol (transcribe_segment, set_language, is_loaded). Speech segments from both mic and speaker streams SHALL be fed sequentially through the active provider. The system SHALL NOT instantiate multiple ASR providers simultaneously. The local ASR provider SHALL use the `mlx-audio` library (`mlx_audio.stt.load`) to load models optimized for Apple Silicon, supporting both full-precision and quantized model variants.
@@ -52,10 +37,3 @@ The system SHALL use the ASR model's built-in language detection to automaticall
 #### Scenario: Language returned as list
 - **WHEN** `mlx-audio` returns language detection as a list (e.g., `['en']`)
 - **THEN** the system SHALL extract the first element and return it as a string
-
-### Requirement: Segment output format
-Each transcription segment SHALL include: unique ID, text content, source ("mic" or "speaker"), speaker label ("You" or "Others"), detected language code, start timestamp, and end timestamp.
-
-#### Scenario: Complete segment emitted
-- **WHEN** ASR produces a transcription result
-- **THEN** the system emits a segment with all required fields: `id`, `text`, `source`, `speaker`, `lang`, `start`, `end`
