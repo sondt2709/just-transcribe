@@ -19,7 +19,15 @@ Real-time audio transcription and translation for macOS. Captures your microphon
 
 Go to [Releases](https://github.com/sondt2709/just-transcribe/releases) and download the latest `.dmg` file. Open it and drag **Just Transcribe** to your Applications folder.
 
-> **Note:** The app is not signed with an Apple certificate. On first launch, right-click the app and choose **Open**, then click **Open** again in the dialog.
+> **Note:** The app is not signed with an Apple certificate yet. macOS will block it on first launch.
+>
+> Open **Terminal** and run:
+> ```sh
+> xattr -cr /Applications/Just\ Transcribe.app
+> ```
+> Then open the app normally. This only needs to be done once.
+>
+> **Why?** macOS Sequoia (15.x) removed the right-click → Open bypass and the "Allow Anyway" button in Privacy & Security may not appear for unsigned apps.
 
 ### Step 2: Install required tools
 
