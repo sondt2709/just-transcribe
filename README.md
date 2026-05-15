@@ -15,7 +15,19 @@ Real-time audio transcription and translation for macOS. Captures your microphon
 
 ## Install
 
-### Step 1: Download the app
+### Option A: Homebrew (recommended)
+
+```sh
+brew tap sondt2709/just-transcribe https://github.com/sondt2709/just-transcribe.git
+brew install --cask just-transcribe
+```
+
+> **Note:** The app is not signed with an Apple certificate yet. After installing, run:
+> ```sh
+> xattr -cr /Applications/Just\ Transcribe.app
+> ```
+
+### Option B: Manual download
 
 Go to [Releases](https://github.com/sondt2709/just-transcribe/releases) and download the latest `.dmg` file. Open it and drag **Just Transcribe** to your Applications folder.
 

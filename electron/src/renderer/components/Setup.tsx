@@ -95,7 +95,7 @@ export function Setup({ onComplete }: SetupProps): JSX.Element {
               onClick={() => chooseProvider('local')}
               className={`w-full text-left px-4 py-3 rounded-lg border transition-colors ${
                 isLocal
-                  ? 'bg-blue-500/10 border-blue-500/30 text-neutral-200'
+                  ? 'bg-teal-500/10 border-teal-500/30 text-neutral-200'
                   : 'bg-neutral-800/50 border-neutral-700 text-neutral-400 hover:text-neutral-200 hover:border-neutral-600'
               }`}
             >
@@ -108,7 +108,7 @@ export function Setup({ onComplete }: SetupProps): JSX.Element {
               onClick={() => chooseProvider('remote')}
               className={`w-full text-left px-4 py-3 rounded-lg border transition-colors ${
                 isRemote
-                  ? 'bg-blue-500/10 border-blue-500/30 text-neutral-200'
+                  ? 'bg-teal-500/10 border-teal-500/30 text-neutral-200'
                   : 'bg-neutral-800/50 border-neutral-700 text-neutral-400 hover:text-neutral-200 hover:border-neutral-600'
               }`}
             >
@@ -203,7 +203,7 @@ export function Setup({ onComplete }: SetupProps): JSX.Element {
             <button
               onClick={runSetup}
               disabled={running}
-              className="flex-1 px-4 py-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 disabled:opacity-50 transition-colors"
+              className="flex-1 px-4 py-2 bg-teal-500 text-white text-sm rounded-lg hover:bg-teal-600 disabled:opacity-50 transition-colors"
             >
               {running ? 'Setting up...' : 'Run Setup'}
             </button>
@@ -237,7 +237,7 @@ function StepSection({
             done
               ? 'bg-green-500/20 text-green-400'
               : active
-                ? 'bg-blue-500/20 text-blue-400'
+                ? 'bg-teal-500/20 text-teal-400'
                 : 'bg-neutral-800 text-neutral-600'
           }`}
         >

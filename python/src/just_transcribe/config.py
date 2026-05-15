@@ -40,6 +40,7 @@ class AppConfig:
     llm_api_key: str = ""
     asr_provider: str = "local"  # "local" or "remote"
     asr_model: str = DEFAULT_ASR_MODEL
+    preferred_language_2: str = ""  # optional second translation target (empty = disabled)
     asr_language: str = ""  # empty = auto-detect, or ISO code like "vi", "en", "zh"
     asr_base_url: str = ""  # remote ASR server URL
     asr_api_key: str = ""  # remote ASR API key
@@ -47,6 +48,7 @@ class AppConfig:
     def to_dict(self) -> dict:
         return {
             "preferred_language": self.preferred_language,
+            "preferred_language_2": self.preferred_language_2,
             "mic_enabled": self.mic_enabled,
             "speaker_enabled": self.speaker_enabled,
             "llm_api_base": self.llm_api_base,
@@ -71,6 +73,7 @@ class AppConfig:
             asr_model = DEFAULT_ASR_MODEL
         return cls(
             preferred_language=data.get("preferred_language", "en"),
+            preferred_language_2=data.get("preferred_language_2", ""),
             mic_enabled=data.get("mic_enabled", True),
             speaker_enabled=data.get("speaker_enabled", True),
             llm_api_base=data.get("llm_api_base", ""),

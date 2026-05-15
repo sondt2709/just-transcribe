@@ -46,7 +46,7 @@ export function Transcript({ segments, interim }: TranscriptProps): JSX.Element 
             <div
               className={`mt-0.5 px-2 py-0.5 rounded text-xs font-medium shrink-0 ${
                 seg.source === 'mic'
-                  ? 'bg-blue-500/20 text-blue-400'
+                  ? 'bg-teal-500/20 text-teal-400'
                   : 'bg-neutral-700/50 text-neutral-400'
               }`}
             >
@@ -63,14 +63,19 @@ export function Transcript({ segments, interim }: TranscriptProps): JSX.Element 
                 </span>
               </div>
 
-              {/* Translation — prominent, not secondary */}
-              {seg.translation && (
-                <div className="mt-1.5 px-3 py-2 rounded-md bg-indigo-500/10 border border-indigo-500/20">
-                  <p className="text-sm text-indigo-200 leading-relaxed">
-                    {seg.translation}
-                  </p>
+              {/* Translations */}
+              {Object.entries(seg.translations).map(([lang, text]) => (
+                <div key={lang} className="mt-1.5 px-3 py-2 rounded-md bg-indigo-500/10 border border-indigo-500/20">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-[10px] font-medium text-indigo-400/70 shrink-0">
+                      {LANG_LABELS[lang] || lang.toUpperCase()}
+                    </span>
+                    <p className="text-sm text-indigo-200 leading-relaxed">
+                      {text}
+                    </p>
+                  </div>
                 </div>
-              )}
+              ))}
             </div>
 
             {/* Timestamp */}

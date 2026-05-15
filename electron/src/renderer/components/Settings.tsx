@@ -8,6 +8,7 @@ interface SettingsProps {
 
 interface Config {
   preferred_language: string
+  preferred_language_2: string
   asr_language: string
   asr_provider: string
   asr_model: string
@@ -37,6 +38,7 @@ const ASR_LANGUAGES = [
 export function Settings({ port, recording, onClose }: SettingsProps): JSX.Element {
   const [config, setConfig] = useState<Config>({
     preferred_language: 'en',
+    preferred_language_2: '',
     asr_language: '',
     asr_provider: 'local',
     asr_model: '',
@@ -55,6 +57,11 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
   const [testing, setTesting] = useState(false)
   const [testStatus, setTestStatus] = useState<'idle' | 'ok' | 'error'>('idle')
   const [showUninstall, setShowUninstall] = useState(false)
+  const [localAsr, setLocalAsr] = useState({ model: '' })
+  const [remoteAsr, setRemoteAsr] = useState({ base_url: '', api_key: '', model: '' })
+  const [llmRemoteModels, setLlmRemoteModels] = useState<string[]>([])
+  const [llmTesting, setLlmTesting] = useState(false)
+  const [llmTestStatus, setLlmTestStatus] = useState<'idle' | 'ok' | 'error'>('idle')
 
   useEffect(() => {
     if (!port) return
@@ -62,8 +69,18 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
       .then((r) => r.json())
       .then((cfg) => {
         setConfig(cfg)
+        if (cfg.asr_provider === 'remote') {
+          setRemoteAsr({ base_url: cfg.asr_base_url, api_key: cfg.asr_api_key, model: cfg.asr_model })
+          setLocalAsr({ model: '' })
+        } else {
+          setLocalAsr({ model: cfg.asr_model })
+          setRemoteAsr({ base_url: cfg.asr_base_url, api_key: cfg.asr_api_key, model: cfg.asr_model })
+        }
         if (cfg.asr_provider === 'remote' && cfg.asr_base_url) {
           testRemote(cfg.asr_base_url, cfg.asr_api_key)
+        }
+        if (cfg.llm_api_base) {
+          testLlmRemote(cfg.llm_api_base, cfg.llm_api_key)
         }
       })
       .catch(console.error)
@@ -92,9 +109,9 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
         setRemoteModels(result.models || [])
         setTestStatus('ok')
         setError(null)
-        if (!config.asr_model || !result.models?.includes(config.asr_model)) {
+        if (!remoteAsr.model || !result.models?.includes(remoteAsr.model)) {
           if (result.models?.length > 0) {
-            setConfig((c) => ({ ...c, asr_model: result.models[0] }))
+            setRemoteAsr((r) => ({ ...r, model: result.models[0] }))
           }
         }
         return true
@@ -113,15 +130,69 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
     }
   }
 
+  const testLlmRemote = async (url: string, apiKey: string): Promise<boolean> => {
+    if (!url) {
+      setError('Server URL is required')
+      return false
+    }
+    if (!port) {
+      setError('Backend not running — restart the app')
+      return false
+    }
+    setLlmTesting(true)
+    setLlmTestStatus('idle')
+    setError(null)
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/api/llm/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, api_key: apiKey })
+      })
+      const result = await res.json()
+      if (result.ok) {
+        setLlmRemoteModels(result.models || [])
+        setLlmTestStatus('ok')
+        setError(null)
+        if (!config.llm_model || !result.models?.includes(config.llm_model)) {
+          if (result.models?.length > 0) {
+            setConfig((c) => ({ ...c, llm_model: result.models[0] }))
+          }
+        }
+        return true
+      } else {
+        setLlmRemoteModels([])
+        setLlmTestStatus('error')
+        setError(result.error || 'Connection failed')
+        return false
+      }
+    } catch (err) {
+      setLlmTestStatus('error')
+      setError('Failed to test connection')
+      return false
+    } finally {
+      setLlmTesting(false)
+    }
+  }
+
   const save = async (): Promise<void> => {
     if (!port) return
     setError(null)
     setSaving(true)
+    const payload = { ...config }
+    if (config.asr_provider === 'local') {
+      payload.asr_model = localAsr.model
+      payload.asr_base_url = ''
+      payload.asr_api_key = ''
+    } else {
+      payload.asr_model = remoteAsr.model
+      payload.asr_base_url = remoteAsr.base_url
+      payload.asr_api_key = remoteAsr.api_key
+    }
     try {
       const res = await fetch(`http://127.0.0.1:${port}/api/config`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config)
+        body: JSON.stringify(payload)
       })
       const result = await res.json()
       if (result.status === 'error') {
@@ -137,7 +208,7 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
   }
 
   const inputClass =
-    'w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-neutral-200 focus:outline-none focus:border-blue-500'
+    'w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-neutral-200 focus:outline-none focus:border-teal-500'
   const selectClass = inputClass
 
   return (
@@ -156,7 +227,7 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
             <button
               onClick={save}
               disabled={saving}
-              className="px-4 py-1.5 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 disabled:opacity-50 transition-colors"
+              className="px-4 py-1.5 bg-teal-500 text-white text-sm rounded-lg hover:bg-teal-600 disabled:opacity-50 transition-colors"
             >
               {saving ? 'Saving...' : 'Save'}
             </button>
@@ -198,11 +269,33 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
               </div>
             </Field>
 
-            {/* Translation language */}
-            <Field label="Translation Language">
+            {/* ASR Language */}
+            <Field label="Recognition Language" hint="Set if auto-detect is inaccurate">
+              <select
+                value={config.asr_language}
+                onChange={(e) => setConfig({ ...config, asr_language: e.target.value })}
+                className={selectClass}
+              >
+                {ASR_LANGUAGES.map((l) => (
+                  <option key={l.code} value={l.code}>
+                    {l.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            {/* Translation languages */}
+            <Field label="Translation Language 1">
               <select
                 value={config.preferred_language}
-                onChange={(e) => setConfig({ ...config, preferred_language: e.target.value })}
+                onChange={(e) => {
+                  const newLang = e.target.value
+                  const updates: Partial<Config> = { preferred_language: newLang }
+                  if (newLang === config.preferred_language_2) {
+                    updates.preferred_language_2 = ''
+                  }
+                  setConfig({ ...config, ...updates })
+                }}
                 className={selectClass}
               >
                 {LANGUAGES.map((l) => (
@@ -213,14 +306,14 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
               </select>
             </Field>
 
-            {/* ASR Language */}
-            <Field label="Recognition Language" hint="Set if auto-detect is inaccurate">
+            <Field label="Translation Language 2" hint="Optional — adds a second translation per segment">
               <select
-                value={config.asr_language}
-                onChange={(e) => setConfig({ ...config, asr_language: e.target.value })}
+                value={config.preferred_language_2}
+                onChange={(e) => setConfig({ ...config, preferred_language_2: e.target.value })}
                 className={selectClass}
               >
-                {ASR_LANGUAGES.map((l) => (
+                <option value="">None</option>
+                {LANGUAGES.filter((l) => l.code !== config.preferred_language).map((l) => (
                   <option key={l.code} value={l.code}>
                     {l.label}
                   </option>
@@ -236,7 +329,7 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
               <button
                 onClick={() => {
                   if (!recording) {
-                    setConfig({ ...config, asr_provider: 'local' })
+                    setConfig((c) => ({ ...c, asr_provider: 'local' }))
                     setTestStatus('idle')
                     setError(null)
                   }
@@ -244,7 +337,7 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
                 disabled={recording}
                 className={`flex-1 px-3 py-2 text-sm rounded-lg border transition-colors ${
                   config.asr_provider === 'local'
-                    ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                    ? 'bg-teal-500/20 text-teal-400 border-teal-500/30'
                     : 'bg-neutral-800 text-neutral-500 border-neutral-700 hover:text-neutral-300'
                 } ${recording ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
@@ -253,14 +346,14 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
               <button
                 onClick={() => {
                   if (!recording) {
-                    setConfig({ ...config, asr_provider: 'remote' })
+                    setConfig((c) => ({ ...c, asr_provider: 'remote' }))
                     setError(null)
                   }
                 }}
                 disabled={recording}
                 className={`flex-1 px-3 py-2 text-sm rounded-lg border transition-colors ${
                   config.asr_provider === 'remote'
-                    ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                    ? 'bg-teal-500/20 text-teal-400 border-teal-500/30'
                     : 'bg-neutral-800 text-neutral-500 border-neutral-700 hover:text-neutral-300'
                 } ${recording ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
@@ -277,9 +370,9 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
                 <Field label="Model" hint="HuggingFace model ID, must be in ~/.cache/huggingface/hub/">
                   <input
                     type="text"
-                    placeholder="Qwen/Qwen3-ASR-1.7B"
-                    value={config.asr_model}
-                    onChange={(e) => setConfig({ ...config, asr_model: e.target.value })}
+                    placeholder="mlx-community/Qwen3-ASR-1.7B-8bit"
+                    value={localAsr.model}
+                    onChange={(e) => setLocalAsr({ ...localAsr, model: e.target.value })}
                     className={inputClass}
                   />
                 </Field>
@@ -294,16 +387,16 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
                     <input
                       type="text"
                       placeholder="http://192.168.1.100:8000"
-                      value={config.asr_base_url}
+                      value={remoteAsr.base_url}
                       onChange={(e) => {
-                        setConfig({ ...config, asr_base_url: e.target.value })
+                        setRemoteAsr({ ...remoteAsr, base_url: e.target.value })
                         setTestStatus('idle')
                       }}
                       className={`flex-1 ${inputClass}`}
                     />
                     <button
-                      onClick={() => testRemote(config.asr_base_url, config.asr_api_key)}
-                      disabled={testing || !config.asr_base_url}
+                      onClick={() => testRemote(remoteAsr.base_url, remoteAsr.api_key)}
+                      disabled={testing || !remoteAsr.base_url}
                       className="px-3 py-2 text-sm bg-neutral-700 text-neutral-300 rounded-lg hover:bg-neutral-600 disabled:opacity-50 transition-colors shrink-0"
                     >
                       {testing ? 'Testing...' : 'Test'}
@@ -315,8 +408,8 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
                   <input
                     type="password"
                     placeholder="Leave empty if not required"
-                    value={config.asr_api_key}
-                    onChange={(e) => setConfig({ ...config, asr_api_key: e.target.value })}
+                    value={remoteAsr.api_key}
+                    onChange={(e) => setRemoteAsr({ ...remoteAsr, api_key: e.target.value })}
                     className={inputClass}
                   />
                 </Field>
@@ -338,8 +431,8 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
                 <Field label="Model" hint={remoteModels.length === 0 ? 'Click Test to discover models' : undefined}>
                   {remoteModels.length > 0 ? (
                     <select
-                      value={config.asr_model}
-                      onChange={(e) => setConfig({ ...config, asr_model: e.target.value })}
+                      value={remoteAsr.model}
+                      onChange={(e) => setRemoteAsr({ ...remoteAsr, model: e.target.value })}
                       className={selectClass}
                     >
                       {remoteModels.map((m) => (
@@ -349,9 +442,9 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
                   ) : (
                     <input
                       type="text"
-                      placeholder="e.g. Qwen/Qwen3-ASR-1.7B"
-                      value={config.asr_model}
-                      onChange={(e) => setConfig({ ...config, asr_model: e.target.value })}
+                      placeholder="e.g. mlx-community/Qwen3-ASR-1.7B-8bit"
+                      value={remoteAsr.model}
+                      onChange={(e) => setRemoteAsr({ ...remoteAsr, model: e.target.value })}
                       className={inputClass}
                     />
                   )}
@@ -364,37 +457,41 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
           <Section title="Translation (LLM)">
             {/* Remote LLM */}
             <div className="flex gap-2 mb-3">
-              <div className="flex-1 px-3 py-2 text-sm rounded-lg border bg-blue-500/20 text-blue-400 border-blue-500/30 text-center">
-                Remote
-              </div>
               <div className="flex-1 px-3 py-2 text-sm rounded-lg border bg-neutral-800 text-neutral-600 border-neutral-700 text-center cursor-default">
                 Local
                 <span className="ml-1.5 text-[10px] text-neutral-600 bg-neutral-800 border border-neutral-700 rounded px-1 py-0.5">
                   soon
                 </span>
               </div>
+              <div className="flex-1 px-3 py-2 text-sm rounded-lg border bg-teal-500/20 text-teal-400 border-teal-500/30 text-center">
+                Remote
+              </div>
             </div>
 
             <div className="bg-neutral-800/50 border border-neutral-800 rounded-lg p-4 space-y-3">
-              <Field label="API Base URL">
-                <input
-                  type="text"
-                  placeholder="e.g. https://api.openai.com"
-                  value={config.llm_api_base}
-                  onChange={(e) => setConfig({ ...config, llm_api_base: e.target.value })}
-                  className={inputClass}
-                />
+              <Field label="Server URL">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="e.g. https://api.openai.com"
+                    value={config.llm_api_base}
+                    onChange={(e) => {
+                      setConfig({ ...config, llm_api_base: e.target.value })
+                      setLlmTestStatus('idle')
+                    }}
+                    className={`flex-1 ${inputClass}`}
+                  />
+                  <button
+                    onClick={() => testLlmRemote(config.llm_api_base, config.llm_api_key)}
+                    disabled={llmTesting || !config.llm_api_base}
+                    className="px-3 py-2 text-sm bg-neutral-700 text-neutral-300 rounded-lg hover:bg-neutral-600 disabled:opacity-50 transition-colors shrink-0"
+                  >
+                    {llmTesting ? 'Testing...' : 'Test'}
+                  </button>
+                </div>
               </Field>
-              <Field label="Model">
-                <input
-                  type="text"
-                  placeholder="e.g. gpt-4o-mini"
-                  value={config.llm_model}
-                  onChange={(e) => setConfig({ ...config, llm_model: e.target.value })}
-                  className={inputClass}
-                />
-              </Field>
-              <Field label="API Key">
+
+              <Field label="API Key (optional)">
                 <input
                   type="password"
                   placeholder="Leave empty if not required"
@@ -402,6 +499,42 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
                   onChange={(e) => setConfig({ ...config, llm_api_key: e.target.value })}
                   className={inputClass}
                 />
+              </Field>
+
+              {/* Connection status */}
+              {llmTestStatus === 'ok' && (
+                <div className="flex items-center gap-2 text-xs text-green-400">
+                  <div className="w-2 h-2 rounded-full bg-green-400" />
+                  Connected — {llmRemoteModels.length} model{llmRemoteModels.length !== 1 ? 's' : ''} available
+                </div>
+              )}
+              {llmTestStatus === 'error' && (
+                <div className="flex items-center gap-2 text-xs text-red-400">
+                  <div className="w-2 h-2 rounded-full bg-red-400" />
+                  Connection failed
+                </div>
+              )}
+
+              <Field label="Model" hint={llmRemoteModels.length === 0 && !config.llm_model ? 'Click Test to discover models' : undefined}>
+                {llmRemoteModels.length > 0 ? (
+                  <select
+                    value={config.llm_model}
+                    onChange={(e) => setConfig({ ...config, llm_model: e.target.value })}
+                    className={selectClass}
+                  >
+                    {llmRemoteModels.map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    placeholder="e.g. gpt-4o-mini"
+                    value={config.llm_model}
+                    onChange={(e) => setConfig({ ...config, llm_model: e.target.value })}
+                    className={inputClass}
+                  />
+                )}
               </Field>
               {!config.llm_api_base && (
                 <p className="text-xs text-neutral-600">

@@ -211,7 +211,7 @@ class PipelineOrchestrator:
                 if self.on_segment:
                     self.on_segment(segment)
 
-                if self._translator.should_translate(segment):
+                if self._translator.get_translation_targets(segment):
                     asyncio.create_task(self._translate(segment))
 
         except Exception as e:
@@ -247,10 +247,11 @@ class PipelineOrchestrator:
         return False
 
     async def _translate(self, segment: TranscriptSegment) -> None:
-        """Translate a segment and emit the result."""
+        """Translate a segment to all applicable targets and emit results."""
         try:
-            result = await self._translator.translate(segment)
-            if result and self.on_translation:
-                self.on_translation(result)
+            results = await self._translator.translate_multi(segment)
+            for result in results:
+                if self.on_translation:
+                    self.on_translation(result)
         except Exception as e:
             logger.warning("Translation error: %s", e)

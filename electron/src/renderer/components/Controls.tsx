@@ -1,11 +1,11 @@
 const ASR_LANGUAGES = [
   { code: '', label: 'Auto' },
-  { code: 'en', label: 'EN' },
-  { code: 'vi', label: 'VI' },
-  { code: 'zh', label: 'ZH' },
-  { code: 'yue', label: 'YUE' },
-  { code: 'ja', label: 'JA' },
-  { code: 'ko', label: 'KO' }
+  { code: 'en', label: 'English' },
+  { code: 'vi', label: 'Vietnamese' },
+  { code: 'zh', label: 'Chinese' },
+  { code: 'yue', label: 'Cantonese' },
+  { code: 'ja', label: 'Japanese' },
+  { code: 'ko', label: 'Korean' }
 ]
 
 interface ControlsProps {
@@ -48,7 +48,7 @@ export function Controls({
           recording
             ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30'
             : connected && modelLoaded
-              ? 'bg-blue-500 text-white hover:bg-blue-600'
+              ? 'bg-teal-500 text-white hover:bg-teal-600'
               : 'bg-neutral-800 text-neutral-500 cursor-not-allowed'
         }`}
       >
@@ -63,7 +63,7 @@ export function Controls({
 
       {/* Quick language selector */}
       <div className="mt-4">
-        <label className="block text-xs text-neutral-500 mb-1.5">Language</label>
+        <label className="block text-xs text-neutral-500 mb-1.5">Source language</label>
         <div className="flex flex-wrap gap-1">
           {ASR_LANGUAGES.map((l) => (
             <button
@@ -71,7 +71,7 @@ export function Controls({
               onClick={() => onAsrLanguageChange(l.code)}
               className={`px-2 py-1 text-xs rounded transition-colors ${
                 asrLanguage === l.code
-                  ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                  ? 'bg-teal-500/20 text-teal-400 border border-teal-500/30'
                   : 'bg-neutral-800 text-neutral-500 hover:text-neutral-300 border border-neutral-700'
               }`}
             >

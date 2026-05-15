@@ -8,8 +8,7 @@ export interface Segment {
   lang: string
   start: number
   end: number
-  translation?: string
-  translationLang?: string
+  translations: Record<string, string>
 }
 
 interface InterimState {
@@ -67,7 +66,8 @@ export function useTranscript(port: number | null): UseTranscriptReturn {
                 speaker: data.speaker,
                 lang: data.lang,
                 start: data.start,
-                end: data.end
+                end: data.end,
+                translations: {}
               }
             ])
             setInterim(null)
@@ -81,7 +81,7 @@ export function useTranscript(port: number | null): UseTranscriptReturn {
             setSegments((prev) =>
               prev.map((seg) =>
                 seg.id === data.id
-                  ? { ...seg, translation: data.text, translationLang: data.target_lang }
+                  ? { ...seg, translations: { ...seg.translations, [data.target_lang]: data.text } }
                   : seg
               )
             )

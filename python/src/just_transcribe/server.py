@@ -97,6 +97,7 @@ def create_app(
             model=config.llm_model,
             api_key=config.llm_api_key,
             preferred_language=config.preferred_language,
+            preferred_language_2=config.preferred_language_2,
         )
 
         logger.info("Models loaded, server ready")
@@ -243,12 +244,22 @@ def create_app(
                 model=state.config.llm_model,
                 api_key=state.config.llm_api_key,
                 preferred_language=state.config.preferred_language,
+                preferred_language_2=state.config.preferred_language_2,
             )
 
         return {"status": "ok"}
 
     @app.post("/api/asr/test")
     async def asr_test(body: dict):
+        url = body.get("url", "")
+        api_key = body.get("api_key", "")
+        if not url:
+            return {"ok": False, "error": "URL is required"}
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, test_connection, url, api_key)
+
+    @app.post("/api/llm/test")
+    async def llm_test(body: dict):
         url = body.get("url", "")
         api_key = body.get("api_key", "")
         if not url:

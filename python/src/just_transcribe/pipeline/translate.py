@@ -40,11 +40,13 @@ class TranslationService:
         model: str = "",
         api_key: str = "",
         preferred_language: str = "en",
+        preferred_language_2: str = "",
     ):
         self.api_base = api_base.rstrip("/")
         self.model = model
         self.api_key = api_key
         self.preferred_language = preferred_language
+        self.preferred_language_2 = preferred_language_2
         self._recent_segments: deque[TranscriptSegment] = deque(maxlen=3)
         self._client: Optional[httpx.AsyncClient] = None
 
@@ -54,11 +56,13 @@ class TranslationService:
         model: str = "",
         api_key: str = "",
         preferred_language: str = "en",
+        preferred_language_2: str = "",
     ) -> None:
         self.api_base = api_base.rstrip("/")
         self.model = model
         self.api_key = api_key
         self.preferred_language = preferred_language
+        self.preferred_language_2 = preferred_language_2
         # Reset client if config changed
         self._client = None
 
@@ -66,30 +70,41 @@ class TranslationService:
     def is_configured(self) -> bool:
         return bool(self.api_base and self.model)
 
-    def should_translate(self, segment: TranscriptSegment) -> bool:
-        """Check if a segment needs translation."""
+    def get_translation_targets(self, segment: TranscriptSegment) -> list[str]:
+        """Return target languages that differ from the segment's detected language."""
         if not self.is_configured:
-            return False
-        # Normalize language comparison
+            return []
         seg_lang = segment.lang.lower().split("-")[0] if segment.lang else ""
-        pref_lang = self.preferred_language.lower().split("-")[0]
-        # Translate if language differs OR is unknown (let LLM decide)
-        if seg_lang == pref_lang:
-            return False
-        return True
+        targets = []
+        for lang in [self.preferred_language, self.preferred_language_2]:
+            if not lang:
+                continue
+            if lang.lower().split("-")[0] != seg_lang and lang not in targets:
+                targets.append(lang)
+        return targets
 
-    async def translate(
+    async def translate_multi(
         self, segment: TranscriptSegment
-    ) -> Optional[TranslationResult]:
-        """Translate a segment. Returns None on failure (non-blocking)."""
-        if not self.is_configured:
-            return None
+    ) -> list[TranslationResult]:
+        """Translate a segment to all applicable targets. Returns results (may be partial on failure)."""
+        targets = self.get_translation_targets(segment)
+        if not targets:
+            return []
 
         self._recent_segments.append(segment)
 
-        target_name = LANG_NAMES.get(
-            self.preferred_language, self.preferred_language
+        import asyncio
+        results = await asyncio.gather(
+            *(self._translate_to(segment, lang) for lang in targets),
+            return_exceptions=True,
         )
+        return [r for r in results if isinstance(r, TranslationResult)]
+
+    async def _translate_to(
+        self, segment: TranscriptSegment, target_lang: str
+    ) -> Optional[TranslationResult]:
+        """Translate a segment to a specific language. Returns None on failure."""
+        target_name = LANG_NAMES.get(target_lang, target_lang)
 
         # Build context from recent segments
         context_lines = []
@@ -129,10 +144,10 @@ class TranslationService:
             return TranslationResult(
                 segment_id=segment.id,
                 translated_text=translated,
-                target_lang=self.preferred_language,
+                target_lang=target_lang,
             )
         except Exception as e:
-            logger.warning("Translation failed for segment %d: %s", segment.id, e)
+            logger.warning("Translation to %s failed for segment %d: %s", target_lang, segment.id, e)
             return None
 
     async def close(self) -> None:
