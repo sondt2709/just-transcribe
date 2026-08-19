@@ -52,6 +52,8 @@ class PipelineOrchestrator:
 
         # Stream timing
         self._start_time: float = 0.0
+        # Wall-clock epoch matching _start_time; wall time of a segment = wall_epoch + segment.start
+        self.wall_epoch: float = 0.0
 
         # Recent transcripts for cross-source dedup
         self._recent_segments: list[TranscriptSegment] = []
@@ -74,6 +76,7 @@ class PipelineOrchestrator:
     async def start(self, mic: bool = True, speaker: bool = True) -> None:
         self._running = True
         self._start_time = time.monotonic()
+        self.wall_epoch = time.time()
 
         await self._stream.start(mic=mic, speaker=speaker)
 

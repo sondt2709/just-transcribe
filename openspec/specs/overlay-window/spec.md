@@ -64,7 +64,7 @@ The overlay window SHALL support two interaction modes: **interactive** (default
 
 #### Scenario: Overlay chrome hidden when click-through
 - **WHEN** click-through mode is active
-- **THEN** the overlay hides its drag handle, resize indicator, and lock button, showing captions only
+- **THEN** the overlay hides its drag handle, resize indicator, lock button, and transcript action buttons (Copy, Clear), showing captions only
 
 #### Scenario: Mode restored on launch
 - **WHEN** the app launches with `overlay_click_through = true` in config.toml
@@ -84,6 +84,17 @@ The user SHALL be able to switch the overlay between interactive and click-throu
 #### Scenario: Unlock from tray menu
 - **WHEN** the overlay is in click-through mode and the user clicks "Unlock Overlay (Interactive)" in the tray menu
 - **THEN** the overlay becomes draggable and resizable again, its chrome reappears, and `overlay_click_through = false` is persisted
+
+### Requirement: Overlay transcript action buttons
+The overlay SHALL display Copy and Clear icon buttons in its drag-handle bar (alongside the lock button) while in interactive mode. The buttons SHALL trigger the same backend-based copy and clear actions as the main window.
+
+#### Scenario: Copy from overlay drag-handle bar
+- **WHEN** the overlay is in interactive mode and the user clicks the Copy button
+- **THEN** the full transcript is fetched from the backend, formatted, and written to the clipboard, with transient visual confirmation
+
+#### Scenario: Clear from overlay drag-handle bar
+- **WHEN** the overlay is in interactive mode and the user clicks the Clear button
+- **THEN** the backend transcript history is cleared and the overlay caption area empties
 
 ### Requirement: Exclusive window mode
 The main window and overlay window SHALL be mutually exclusive. Only one SHALL be visible at a time. Switching between modes hides one and shows the other.

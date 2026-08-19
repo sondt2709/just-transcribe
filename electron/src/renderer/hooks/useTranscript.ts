@@ -8,6 +8,7 @@ export interface Segment {
   lang: string
   start: number
   end: number
+  wallStart: number
   translations: Record<string, string>
 }
 
@@ -67,6 +68,7 @@ export function useTranscript(port: number | null): UseTranscriptReturn {
                 lang: data.lang,
                 start: data.start,
                 end: data.end,
+                wallStart: data.wall_start ?? 0,
                 translations: {}
               }
             ])
@@ -85,6 +87,11 @@ export function useTranscript(port: number | null): UseTranscriptReturn {
                   : seg
               )
             )
+            break
+
+          case 'clear':
+            setSegments([])
+            setInterim(null)
             break
 
           case 'error':
