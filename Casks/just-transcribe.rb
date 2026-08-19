@@ -11,13 +11,20 @@ cask "just-transcribe" do
 
   app "Just Transcribe.app"
 
+  postflight do
+    system_command "/usr/bin/xattr",
+                   args: ["-cr", "#{appdir}/Just Transcribe.app"],
+                   sudo: false
+  end
+
   zap trash: [
     "~/.just-transcribe",
     "~/Library/Application Support/just-transcribe",
   ]
 
   caveats <<~EOS
-    App is unsigned. If installed without --no-quarantine, run:
+    App is unsigned; quarantine is cleared automatically on install.
+    If macOS still blocks the app, run:
       xattr -cr "/Applications/Just Transcribe.app"
   EOS
 end
