@@ -18,7 +18,6 @@ AUDIOTEE_BIN = BIN_DIR / "audiotee"
 
 # Model defaults
 DEFAULT_ASR_MODEL = "mlx-community/Qwen3-ASR-1.7B-8bit"
-_LEGACY_ASR_MODEL = "Qwen/Qwen3-ASR-1.7B"
 DEFAULT_SAMPLE_RATE = 16000
 
 # VAD defaults
@@ -63,14 +62,6 @@ class AppConfig:
 
     @classmethod
     def from_dict(cls, data: dict) -> AppConfig:
-        asr_model = data.get("asr_model", DEFAULT_ASR_MODEL)
-        if asr_model == _LEGACY_ASR_MODEL:
-            logger.warning(
-                "Migrating legacy asr_model %r → %r (mlx-qwen3-asr removed)",
-                _LEGACY_ASR_MODEL,
-                DEFAULT_ASR_MODEL,
-            )
-            asr_model = DEFAULT_ASR_MODEL
         return cls(
             preferred_language=data.get("preferred_language", "en"),
             preferred_language_2=data.get("preferred_language_2", ""),
@@ -80,7 +71,7 @@ class AppConfig:
             llm_model=data.get("llm_model", ""),
             llm_api_key=data.get("llm_api_key", ""),
             asr_provider=data.get("asr_provider", "local"),
-            asr_model=asr_model,
+            asr_model=data.get("asr_model", DEFAULT_ASR_MODEL),
             asr_language=data.get("asr_language", ""),
             asr_base_url=data.get("asr_base_url", ""),
             asr_api_key=data.get("asr_api_key", ""),
