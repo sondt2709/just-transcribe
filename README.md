@@ -139,6 +139,17 @@ npx electron-builder --mac
 
 The DMG is output to `electron/dist/`.
 
+### Releases
+
+Releases are fully automated. On every merge to `main`, CI analyzes commit messages ([Conventional Commits](https://www.conventionalcommits.org/)):
+
+- `fix:` → patch release, `feat:` → minor, `feat!:`/`BREAKING CHANGE:` → major
+- Other types (`chore:`, `docs:`, `refactor:`, `test:`) release nothing
+
+When a release is due, CI builds the DMG, tags `vX.Y.Z`, publishes a GitHub release with the DMG attached, and updates the Homebrew cask — no manual steps.
+
+PRs are squash-merged with the PR title as the commit message, so **the PR title must follow Conventional Commits** (enforced by a check).
+
 ## License
 
 [MIT](LICENSE)
