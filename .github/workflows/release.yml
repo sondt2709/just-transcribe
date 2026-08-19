@@ -1,54 +1,91 @@
-name: Build and Release
+name: Release
 
 on:
   workflow_dispatch:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
 
 permissions:
   contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+env:
+  SEMANTIC_RELEASE_PKGS: >-
+    -p semantic-release@25.0.3
+    -p @semantic-release/commit-analyzer@13.0.1
+    -p @semantic-release/release-notes-generator@14.1.1
+    -p @semantic-release/github@12.0.3
 
 jobs:
-  build:
+  release:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: electron/package-lock.json
 
+      - name: Compute next version
+        id: version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NEXT=$(npx $SEMANTIC_RELEASE_PKGS semantic-release --dry-run 2>&1 \
+            | grep -Eo 'next release version is [0-9]+\.[0-9]+\.[0-9]+' \
+            | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' || true)
+          if [[ -z "$NEXT" ]]; then
+            echo "No release-worthy commits, skipping release."
+          else
+            echo "Next version: $NEXT"
+          fi
+          echo "next=$NEXT" >> "$GITHUB_OUTPUT"
+
       - name: Install dependencies
+        if: steps.version.outputs.next != ''
         run: cd electron && npm ci
 
+      - name: Set build version
+        if: steps.version.outputs.next != ''
+        run: |
+          cd electron
+          npm version "${{ steps.version.outputs.next }}" --no-git-tag-version
+
       - name: Build and package
+        if: steps.version.outputs.next != ''
         run: |
           cd electron
           npm run build
           npx electron-builder --mac --publish never
 
-      - name: Upload DMG artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: just-transcribe-dmg
-          path: electron/dist/*.dmg
+      - name: Publish release
+        if: steps.version.outputs.next != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx $SEMANTIC_RELEASE_PKGS semantic-release
 
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: just-transcribe-dmg
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: '*.dmg'
-          generate_release_notes: true
-          draft: false
-          prerelease: false
+      - name: Update Homebrew cask
+        if: steps.version.outputs.next != ''
+        run: |
+          VERSION="${{ steps.version.outputs.next }}"
+          DMG=$(ls electron/dist/*.dmg | head -n 1)
+          SHA=$(shasum -a 256 "$DMG" | awk '{print $1}')
+          sed -i '' -E "s/^  version \".*\"/  version \"$VERSION\"/" Casks/just-transcribe.rb
+          sed -i '' -E "s/^  sha256 \".*\"/  sha256 \"$SHA\"/" Casks/just-transcribe.rb
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/just-transcribe.rb
+          git commit -m "chore: update Homebrew cask to v$VERSION [skip ci]"
+          git push origin HEAD:main
