@@ -2,7 +2,8 @@
 .tmp/
 .omc/
 .opencode/
-.claude/
+.claude/*
+!.claude/skills/
 
 # Dependencies
 node_modules/
