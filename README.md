@@ -33,6 +33,24 @@ xattr -cr /Applications/Just\ Transcribe.app
 
 > The app is not signed with an Apple certificate yet, so macOS blocks quarantined downloads. The Homebrew cask clears quarantine automatically on install; for manual downloads run `xattr -cr` once as shown above.
 
+## Upgrade
+
+```sh
+brew update
+brew upgrade --cask just-transcribe
+```
+
+If Homebrew says the latest version is already installed but `brew list --cask --versions just-transcribe` shows an old version, the tap didn't refresh (Homebrew may skip third-party taps during `brew update`). Force it:
+
+```sh
+git -C "$(brew --repository sondt2709/just-transcribe)" pull
+brew upgrade --cask just-transcribe
+```
+
+The first launch after an upgrade takes a few extra seconds while the app refreshes its Python backend.
+
+> **Upgrading from ≤ v0.1.5 with remote ASR:** if transcription stopped working, open Settings and re-select your ASR model (e.g. `Qwen/Qwen3-ASR-1.7B`). An old config migration rewrote the model name; v0.1.6+ no longer does.
+
 ### Step 2: Install required tools
 
 Open **Terminal** (search "Terminal" in Spotlight) and run these commands one at a time:
