@@ -99,12 +99,14 @@ function readAsrProvider(): string {
 export interface ElectronConfig {
   overlay_position: string
   overlay_enabled: boolean
+  overlay_click_through: boolean
   launch_at_login: boolean
 }
 
 const ELECTRON_CONFIG_DEFAULTS: ElectronConfig = {
   overlay_position: 'bottom-center',
   overlay_enabled: false,
+  overlay_click_through: false,
   launch_at_login: false
 }
 
@@ -121,12 +123,14 @@ export function readElectronConfig(): ElectronConfig {
 
     const posMatch = content.match(/overlay_position\s*=\s*"([^"]*)"/)
     const enabledMatch = content.match(/overlay_enabled\s*=\s*(true|false)/)
+    const clickThroughMatch = content.match(/overlay_click_through\s*=\s*(true|false)/)
     const loginMatch = content.match(/launch_at_login\s*=\s*(true|false)/)
 
     const position = posMatch?.[1] ?? ''
     return {
       overlay_position: VALID_POSITIONS.includes(position) ? position : ELECTRON_CONFIG_DEFAULTS.overlay_position,
       overlay_enabled: enabledMatch ? enabledMatch[1] === 'true' : ELECTRON_CONFIG_DEFAULTS.overlay_enabled,
+      overlay_click_through: clickThroughMatch ? clickThroughMatch[1] === 'true' : ELECTRON_CONFIG_DEFAULTS.overlay_click_through,
       launch_at_login: loginMatch ? loginMatch[1] === 'true' : ELECTRON_CONFIG_DEFAULTS.launch_at_login
     }
   } catch {

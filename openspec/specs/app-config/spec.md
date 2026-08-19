@@ -92,6 +92,21 @@ The config.toml file SHALL include an `overlay_enabled` boolean field that track
 - **WHEN** the app launches with `overlay_enabled = true` in config.toml
 - **THEN** the app starts in overlay mode (overlay window shown when recording begins, no main window)
 
+### Requirement: Overlay click-through configuration
+The config.toml file SHALL include an `overlay_click_through` boolean field that stores whether the overlay is locked in click-through mode. The default SHALL be `false` (interactive). The field SHALL be read and written directly by the Electron main process and SHALL NOT be exposed through the Python backend's `/api/config` endpoint.
+
+#### Scenario: Default is interactive
+- **WHEN** config.toml does not contain `overlay_click_through`
+- **THEN** the overlay starts in interactive mode
+
+#### Scenario: Persist click-through preference
+- **WHEN** the user toggles the overlay interaction mode (via tray menu or overlay lock button)
+- **THEN** the new `overlay_click_through` value is written to config.toml
+
+#### Scenario: Invalid value falls back to default
+- **WHEN** config.toml contains an unparseable `overlay_click_through` value
+- **THEN** the system falls back to `false` (interactive)
+
 ### Requirement: Launch at login configuration
 The config.toml file SHALL include a `launch_at_login` boolean field. The default SHALL be `false`. This field SHALL be read by the Electron main process to register or unregister the app as a macOS login item.
 
@@ -108,11 +123,11 @@ The config.toml file SHALL include a `launch_at_login` boolean field. The defaul
 - **THEN** the value is saved to config.toml and the app unregisters from macOS login items
 
 ### Requirement: Electron-only config fields
-The overlay_position, overlay_enabled, and launch_at_login fields SHALL be read and written directly by the Electron main process. These fields SHALL NOT be exposed through the Python backend's `/api/config` endpoint, as they are purely Electron-side concerns.
+The overlay_position, overlay_enabled, overlay_click_through, and launch_at_login fields SHALL be read and written directly by the Electron main process. These fields SHALL NOT be exposed through the Python backend's `/api/config` endpoint, as they are purely Electron-side concerns.
 
 #### Scenario: Config fields not in backend API
 - **WHEN** the Python backend reads config.toml for its own configuration
-- **THEN** it ignores overlay_position, overlay_enabled, and launch_at_login fields
+- **THEN** it ignores overlay_position, overlay_enabled, overlay_click_through, and launch_at_login fields
 
 #### Scenario: Electron reads config directly
 - **WHEN** the Electron main process needs overlay or launch settings

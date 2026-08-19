@@ -24,6 +24,7 @@ export interface TrayCallbacks {
   onStopRecording: () => void
   onShowMainWindow: () => void
   onShowOverlay: () => void
+  onToggleClickThrough: () => void
   onOpenSettings: () => void
   onQuit: () => void
 }
@@ -31,6 +32,7 @@ export interface TrayCallbacks {
 let callbacks: TrayCallbacks | null = null
 let isRecording = false
 let isOverlayMode = false
+let isClickThrough = false
 
 export function createTray(cb: TrayCallbacks): void {
   callbacks = cb
@@ -39,9 +41,10 @@ export function createTray(cb: TrayCallbacks): void {
   rebuildMenu()
 }
 
-export function updateTrayState(recording: boolean, overlayMode: boolean): void {
+export function updateTrayState(recording: boolean, overlayMode: boolean, clickThrough: boolean): void {
   isRecording = recording
   isOverlayMode = overlayMode
+  isClickThrough = clickThrough
   if (tray) {
     tray.setImage(getTrayIcon(recording))
     rebuildMenu()
@@ -60,6 +63,12 @@ function rebuildMenu(): void {
       label: isOverlayMode ? 'Show Main Window' : 'Show Overlay',
       click: () => isOverlayMode ? callbacks!.onShowMainWindow() : callbacks!.onShowOverlay()
     },
+    ...(isOverlayMode
+      ? [{
+          label: isClickThrough ? 'Unlock Overlay (Interactive)' : 'Lock Overlay (Click-Through)',
+          click: (): void => callbacks!.onToggleClickThrough()
+        }]
+      : []),
     { type: 'separator' },
     {
       label: 'Settings',

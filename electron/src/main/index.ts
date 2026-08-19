@@ -22,6 +22,7 @@ let overlayWindow: BrowserWindow | null = null
 let activeMode: 'main' | 'overlay' = 'main'
 let isRecording = false
 let isQuitting = false
+let clickThrough = false
 
 function getElectronRoot(): string {
   return is.dev ? join(__dirname, '..', '..') : app.getAppPath()
@@ -120,11 +121,31 @@ function createOverlayWindow(): void {
     }
   })
 
+  overlayWindow.webContents.on('did-finish-load', () => {
+    applyOverlayInteractionMode()
+  })
+
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     overlayWindow.loadURL(process.env['ELECTRON_RENDERER_URL'] + '#overlay')
   } else {
     overlayWindow.loadFile(join(__dirname, '../renderer/index.html'), { hash: 'overlay' })
   }
+}
+
+// ── Overlay interaction mode (interactive vs click-through) ──
+
+function applyOverlayInteractionMode(): void {
+  if (!overlayWindow || overlayWindow.isDestroyed()) return
+  overlayWindow.setIgnoreMouseEvents(clickThrough, { forward: true })
+  overlayWindow.setFocusable(!clickThrough)
+  overlayWindow.webContents.send('overlay-mode-changed', { clickThrough })
+}
+
+function setOverlayClickThrough(value: boolean): void {
+  clickThrough = value
+  applyOverlayInteractionMode()
+  writeElectronConfig({ overlay_click_through: value })
+  updateTrayState(isRecording, activeMode === 'overlay', clickThrough)
 }
 
 // ── Mode switching ──
@@ -145,7 +166,7 @@ function switchToOverlay(): void {
     const port = getBackendPort()
     if (port) overlayWindow.webContents.send('backend-started', { port })
   }
-  updateTrayState(isRecording, true)
+  updateTrayState(isRecording, true, clickThrough)
   writeElectronConfig({ overlay_enabled: true })
 }
 
@@ -154,7 +175,7 @@ function switchToMain(): void {
   overlayWindow?.hide()
   if (!mainWindow || mainWindow.isDestroyed()) createMainWindow()
   mainWindow?.show()
-  updateTrayState(isRecording, false)
+  updateTrayState(isRecording, false, clickThrough)
   writeElectronConfig({ overlay_enabled: false })
 }
 
@@ -179,7 +200,7 @@ async function startRecording(): Promise<void> {
       overlayWindow?.show()
     }
 
-    updateTrayState(true, activeMode === 'overlay')
+    updateTrayState(true, activeMode === 'overlay', clickThrough)
 
     // Notify all windows of recording state change
     for (const win of BrowserWindow.getAllWindows()) {
@@ -203,7 +224,7 @@ async function stopRecording(): Promise<void> {
   }
 
   isRecording = false
-  updateTrayState(false, activeMode === 'overlay')
+  updateTrayState(false, activeMode === 'overlay', clickThrough)
 
   for (const win of BrowserWindow.getAllWindows()) {
     win.webContents.send('recording-state', { recording: false })
@@ -293,6 +314,10 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('get-electron-config', () => readElectronConfig())
 
+  ipcMain.handle('set-overlay-click-through', (_event, value: boolean) => {
+    setOverlayClickThrough(value)
+  })
+
   ipcMain.handle('set-electron-config', (_event, updates: Record<string, unknown>) => {
     writeElectronConfig(updates as { overlay_position?: string; overlay_enabled?: boolean; launch_at_login?: boolean })
 
@@ -318,6 +343,7 @@ app.whenReady().then(async () => {
     onStopRecording: () => stopRecording(),
     onShowMainWindow: () => switchToMain(),
     onShowOverlay: () => switchToOverlay(),
+    onToggleClickThrough: () => setOverlayClickThrough(!clickThrough),
     onOpenSettings: () => {
       if (activeMode !== 'main') switchToMain()
       else if (!mainWindow?.isVisible()) mainWindow?.show()
@@ -332,6 +358,8 @@ app.whenReady().then(async () => {
   if (electronConfig.overlay_enabled) {
     activeMode = 'overlay'
   }
+  clickThrough = electronConfig.overlay_click_through
+  updateTrayState(isRecording, activeMode === 'overlay', clickThrough)
 
   // Apply launch-at-login from config (only works in production builds)
   if (!is.dev) {
