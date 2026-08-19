@@ -19,8 +19,9 @@ Real-time audio transcription and translation for macOS. Captures your microphon
 
 ```sh
 brew tap sondt2709/just-transcribe https://github.com/sondt2709/just-transcribe.git
-brew trust sondt2709/just-transcribe   # Homebrew 6.0+ only
+brew trust sondt2709/just-transcribe
 brew install --cask just-transcribe
+xattr -cr /Applications/Just\ Transcribe.app
 ```
 
 ### Option B: Manual download
@@ -31,7 +32,7 @@ Download the latest `.dmg` from [Releases](https://github.com/sondt2709/just-tra
 xattr -cr /Applications/Just\ Transcribe.app
 ```
 
-> The app is not signed with an Apple certificate yet, so macOS blocks quarantined downloads. The Homebrew cask clears quarantine automatically on install; for manual downloads run `xattr -cr` once as shown above.
+> `xattr -cr` is not a security threat, the app just is not signed with an Apple certificate yet
 
 ## Upgrade
 
@@ -40,7 +41,7 @@ brew update
 brew upgrade --cask just-transcribe
 ```
 
-> Upgrading from ≤ v0.1.5 with remote ASR: re-select your ASR model in Settings once (an old config migration rewrote it).
+Go to App Setttings > Reinstall Backend
 
 ### Step 2: Install required tools
 
