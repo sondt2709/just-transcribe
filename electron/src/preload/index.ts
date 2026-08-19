@@ -23,12 +23,23 @@ const api = {
     ipcRenderer.invoke('start-backend'),
   getBackendPort: (): Promise<number> => ipcRenderer.invoke('get-backend-port'),
 
+  // Electron-only config
+  getElectronConfig: (): Promise<{ overlay_position: string; overlay_enabled: boolean; launch_at_login: boolean }> =>
+    ipcRenderer.invoke('get-electron-config'),
+  setElectronConfig: (updates: Record<string, unknown>): Promise<void> =>
+    ipcRenderer.invoke('set-electron-config', updates),
+
   // Events from main process
   onBackendStarted: (callback: (data: { port: number }) => void): void => {
     ipcRenderer.on('backend-started', (_event, data) => callback(data))
   },
   onPythonCrashed: (callback: (data: { code: number; signal: string }) => void): void => {
     ipcRenderer.on('python-crashed', (_event, data) => callback(data))
+  },
+
+  // Settings trigger from tray
+  onOpenSettings: (callback: () => void): void => {
+    ipcRenderer.on('open-settings', () => callback())
   }
 }
 

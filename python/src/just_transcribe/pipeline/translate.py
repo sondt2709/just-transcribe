@@ -31,6 +31,14 @@ class TranslationResult:
     target_lang: str
 
 
+@dataclass
+class ContextEntry:
+    text: str
+    speaker: str
+    lang: str
+    translations: dict[str, str]
+
+
 class TranslationService:
     """Translates transcript segments via OpenAI-compatible chat API."""
 
@@ -47,7 +55,7 @@ class TranslationService:
         self.api_key = api_key
         self.preferred_language = preferred_language
         self.preferred_language_2 = preferred_language_2
-        self._recent_segments: deque[TranscriptSegment] = deque(maxlen=3)
+        self._context_window: deque[ContextEntry] = deque(maxlen=4)
         self._client: Optional[httpx.AsyncClient] = None
 
     def update_config(
@@ -91,30 +99,49 @@ class TranslationService:
         if not targets:
             return []
 
-        self._recent_segments.append(segment)
+        entry = ContextEntry(
+            text=segment.text,
+            speaker=segment.speaker,
+            lang=(segment.lang or "").lower().split("-")[0],
+            translations={},
+        )
+        self._context_window.append(entry)
 
         import asyncio
         results = await asyncio.gather(
             *(self._translate_to(segment, lang) for lang in targets),
             return_exceptions=True,
         )
-        return [r for r in results if isinstance(r, TranslationResult)]
+
+        valid_results = []
+        for r in results:
+            if isinstance(r, TranslationResult):
+                entry.translations[r.target_lang] = r.translated_text
+                valid_results.append(r)
+        return valid_results
 
     async def _translate_to(
         self, segment: TranscriptSegment, target_lang: str
     ) -> Optional[TranslationResult]:
         """Translate a segment to a specific language. Returns None on failure."""
         target_name = LANG_NAMES.get(target_lang, target_lang)
+        source_lang = (segment.lang or "").lower().split("-")[0]
+        source_name = LANG_NAMES.get(source_lang, source_lang)
 
-        # Build context from recent segments
         context_lines = []
-        for prev in list(self._recent_segments)[:-1]:
-            context_lines.append(f"[{prev.speaker}]: {prev.text}")
+        for prev in list(self._context_window)[:-1]:
+            prev_source_name = LANG_NAMES.get(prev.lang, prev.lang)
+            context_lines.append(f"[{prev.speaker}] {prev_source_name}: {prev.text}")
+            if target_lang in prev.translations:
+                context_lines.append(f"[{prev.speaker}] {target_name}: {prev.translations[target_lang]}")
+            context_lines.append("")
 
-        context = "\n".join(context_lines)
-        prompt = f"Translate the following to {target_name}. Output ONLY the translation, nothing else."
+        context = "\n".join(context_lines).strip()
+        prompt = f"You are a professional translator. Translate from {source_name} to {target_name}. Output ONLY the translation, nothing else."
         if context:
-            prompt += f"\n\nContext from the conversation:\n{context}\n\nText to translate:"
+            prompt += f"\n\nPrevious exchanges:\n{context}\n\nTranslate:"
+
+        logger.debug("Translation prompt for segment %d to %s:\n%s", segment.id, target_lang, prompt)
 
         try:
             if self._client is None:

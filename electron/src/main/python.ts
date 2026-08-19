@@ -85,8 +85,13 @@ export async function startPythonBackend(): Promise<number> {
   })
 }
 
-export function stopPythonBackend(): void {
-  if (pythonProcess) {
+export function stopPythonBackend(): Promise<void> {
+  return new Promise((resolve) => {
+    if (!pythonProcess) {
+      resolve()
+      return
+    }
+
     // Close stdin (triggers EOF detection in Python)
     pythonProcess.stdin?.end()
     pythonProcess.kill('SIGTERM')
@@ -97,13 +102,15 @@ export function stopPythonBackend(): void {
         pythonProcess.kill('SIGKILL')
         pythonProcess = null
       }
+      resolve()
     }, 3000)
 
     pythonProcess.on('exit', () => {
       clearTimeout(forceKill)
       pythonProcess = null
+      resolve()
     })
-  }
+  })
 }
 
 export function isPythonRunning(): boolean {

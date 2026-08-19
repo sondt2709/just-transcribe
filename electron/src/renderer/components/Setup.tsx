@@ -55,7 +55,7 @@ export function Setup({ onComplete }: SetupProps): JSX.Element {
 
   if (!status) {
     return (
-      <div className="h-screen flex items-center justify-center">
+      <div className="h-screen flex items-center justify-center bg-neutral-950">
         <div className="text-neutral-400 text-sm">Checking setup...</div>
       </div>
     )

@@ -544,7 +544,18 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
             </div>
           </Section>
 
-          {/* ── Section 4: Maintenance ── */}
+          {/* ── Section 4: Overlay & System ── */}
+          <Section title="Overlay & System">
+            <Field label="Overlay Position" hint="Where captions appear when in overlay mode">
+              <OverlayPositionPicker />
+            </Field>
+
+            <Field label="Launch at Login">
+              <LaunchAtLoginToggle />
+            </Field>
+          </Section>
+
+          {/* ── Section 5: Maintenance ── */}
           <Section title="Maintenance">
             <button
               onClick={async () => {
@@ -621,6 +632,65 @@ function Field({
       {children}
       {hint && <p className="text-xs text-neutral-600 mt-1">{hint}</p>}
     </div>
+  )
+}
+
+const POSITIONS = [
+  ['top-left', 'top-center', 'top-right'],
+  ['middle-left', 'center', 'middle-right'],
+  ['bottom-left', 'bottom-center', 'bottom-right']
+]
+
+function OverlayPositionPicker(): JSX.Element {
+  const [position, setPosition] = useState('bottom-center')
+
+  useEffect(() => {
+    window.api.getElectronConfig().then((cfg) => setPosition(cfg.overlay_position))
+  }, [])
+
+  const handleSelect = (pos: string): void => {
+    setPosition(pos)
+    window.api.setElectronConfig({ overlay_position: pos })
+  }
+
+  return (
+    <div className="inline-grid grid-cols-3 gap-1">
+      {POSITIONS.map((row) =>
+        row.map((pos) => (
+          <button
+            key={pos}
+            onClick={() => handleSelect(pos)}
+            className={`w-8 h-6 rounded border transition-colors ${
+              position === pos
+                ? 'bg-teal-500/30 border-teal-500/50'
+                : 'bg-neutral-800 border-neutral-700 hover:border-neutral-600'
+            }`}
+            title={pos}
+          />
+        ))
+      )}
+    </div>
+  )
+}
+
+function LaunchAtLoginToggle(): JSX.Element {
+  const [enabled, setEnabled] = useState(false)
+
+  useEffect(() => {
+    window.api.getElectronConfig().then((cfg) => setEnabled(cfg.launch_at_login))
+  }, [])
+
+  const toggle = (): void => {
+    const next = !enabled
+    setEnabled(next)
+    window.api.setElectronConfig({ launch_at_login: next })
+  }
+
+  return (
+    <label className="flex items-center gap-2 text-sm text-neutral-300">
+      <input type="checkbox" checked={enabled} onChange={toggle} className="rounded" />
+      Start automatically when you log in
+    </label>
   )
 }
 

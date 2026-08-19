@@ -1,10 +1,13 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
+import { OverlayView } from './components/OverlayView'
 import './assets/main.css'
+
+const isOverlay = window.location.hash === '#overlay'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
+    {isOverlay ? <OverlayView /> : <App />}
   </React.StrictMode>
 )

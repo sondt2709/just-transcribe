@@ -38,12 +38,17 @@ export default function App(): JSX.Element {
     window.api.getSetupStatus().then((status) => {
       setSetupComplete(status.ready)
     })
+
+    // Open settings when triggered from tray menu
+    window.api.onOpenSettings(() => {
+      setShowSettings(true)
+    })
   }, [])
 
   // Loading state
   if (setupComplete === null) {
     return (
-      <div className="h-screen flex items-center justify-center">
+      <div className="h-screen flex items-center justify-center bg-neutral-950">
         <div className="text-neutral-400 text-sm">Loading...</div>
       </div>
     )

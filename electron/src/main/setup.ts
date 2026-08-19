@@ -94,6 +94,63 @@ function readAsrProvider(): string {
   }
 }
 
+// ── Electron-only config fields (overlay, tray, launch-at-login) ──
+
+export interface ElectronConfig {
+  overlay_position: string
+  overlay_enabled: boolean
+  launch_at_login: boolean
+}
+
+const ELECTRON_CONFIG_DEFAULTS: ElectronConfig = {
+  overlay_position: 'bottom-center',
+  overlay_enabled: false,
+  launch_at_login: false
+}
+
+const VALID_POSITIONS = [
+  'top-left', 'top-center', 'top-right',
+  'middle-left', 'center', 'middle-right',
+  'bottom-left', 'bottom-center', 'bottom-right'
+]
+
+export function readElectronConfig(): ElectronConfig {
+  try {
+    if (!fs.existsSync(CONFIG_FILE)) return { ...ELECTRON_CONFIG_DEFAULTS }
+    const content = fs.readFileSync(CONFIG_FILE, 'utf-8')
+
+    const posMatch = content.match(/overlay_position\s*=\s*"([^"]*)"/)
+    const enabledMatch = content.match(/overlay_enabled\s*=\s*(true|false)/)
+    const loginMatch = content.match(/launch_at_login\s*=\s*(true|false)/)
+
+    const position = posMatch?.[1] ?? ''
+    return {
+      overlay_position: VALID_POSITIONS.includes(position) ? position : ELECTRON_CONFIG_DEFAULTS.overlay_position,
+      overlay_enabled: enabledMatch ? enabledMatch[1] === 'true' : ELECTRON_CONFIG_DEFAULTS.overlay_enabled,
+      launch_at_login: loginMatch ? loginMatch[1] === 'true' : ELECTRON_CONFIG_DEFAULTS.launch_at_login
+    }
+  } catch {
+    return { ...ELECTRON_CONFIG_DEFAULTS }
+  }
+}
+
+export function writeElectronConfig(updates: Partial<ElectronConfig>): void {
+  fs.mkdirSync(APP_DIR, { recursive: true })
+  let content = fs.existsSync(CONFIG_FILE) ? fs.readFileSync(CONFIG_FILE, 'utf-8') : ''
+
+  for (const [key, value] of Object.entries(updates)) {
+    const strValue = typeof value === 'boolean' ? String(value) : `"${value}"`
+    const regex = new RegExp(`${key}\\s*=\\s*(?:"[^"]*"|true|false)`)
+    if (regex.test(content)) {
+      content = content.replace(regex, `${key} = ${strValue}`)
+    } else {
+      content += `\n${key} = ${strValue}\n`
+    }
+  }
+
+  fs.writeFileSync(CONFIG_FILE, content, 'utf-8')
+}
+
 export function saveAsrProvider(provider: string): void {
   fs.mkdirSync(APP_DIR, { recursive: true })
   if (fs.existsSync(CONFIG_FILE)) {
@@ -140,6 +197,33 @@ export function checkSetupStatus(): SetupStatus {
     asrProvider,
     ready
   }
+}
+
+// ── Backend version marker ──
+// Written after a successful source copy + uv sync; a mismatch with the
+// running app version means the installed backend is stale and must be
+// refreshed. Lives inside python/ so wiping that dir also resets it.
+
+function versionMarkerPath(): string {
+  return path.join(PYTHON_DIR, '.app-version')
+}
+
+export function readBackendVersion(): string {
+  try {
+    return fs.readFileSync(versionMarkerPath(), 'utf-8').trim()
+  } catch {
+    return ''
+  }
+}
+
+export function writeBackendVersion(version: string): void {
+  fs.mkdirSync(PYTHON_DIR, { recursive: true })
+  fs.writeFileSync(versionMarkerPath(), version, 'utf-8')
+}
+
+export function backendNeedsRefresh(appVersion: string, isDev: boolean): boolean {
+  if (isDev) return false
+  return readBackendVersion() !== appVersion
 }
 
 export function ensureAppDirectory(): void {
