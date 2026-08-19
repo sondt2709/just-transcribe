@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useBackend } from '../hooks/useBackend'
 import { useTranscript } from '../hooks/useTranscript'
+import { copyTranscript, clearTranscript } from '../lib/transcriptActions'
 
 const MAX_VISIBLE = 10
 
@@ -9,6 +10,29 @@ export function OverlayView(): JSX.Element {
   const { segments, interim, connected } = useTranscript(backend.port)
   const bottomRef = useRef<HTMLDivElement>(null)
   const [clickThrough, setClickThrough] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = async (): Promise<void> => {
+    if (!backend.port) return
+    try {
+      const ok = await copyTranscript(backend.port)
+      if (ok) {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1500)
+      }
+    } catch (err) {
+      console.error('Copy transcript failed:', err)
+    }
+  }
+
+  const handleClear = async (): Promise<void> => {
+    if (!backend.port) return
+    try {
+      await clearTranscript(backend.port)
+    } catch (err) {
+      console.error('Clear transcript failed:', err)
+    }
+  }
 
   useEffect(() => {
     window.api.getElectronConfig().then((cfg) => setClickThrough(cfg.overlay_click_through))
@@ -32,7 +56,32 @@ export function OverlayView(): JSX.Element {
           className="h-7 flex items-center justify-between shrink-0 cursor-move px-2"
           style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
         >
-          <div className="w-14" />
+          <div className="flex items-center gap-0.5" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+            <button
+              className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium transition-colors ${
+                copied ? 'text-teal-300' : 'text-white/50 hover:text-white/90 hover:bg-white/10'
+              }`}
+              onClick={handleCopy}
+              title="Copy transcript"
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+              </svg>
+              {copied ? '✓' : 'Copy'}
+            </button>
+            <button
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded-md text-white/50 hover:text-red-300 hover:bg-white/10 text-[10px] font-medium transition-colors"
+              onClick={handleClear}
+              title="Clear transcript"
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              </svg>
+              Clear
+            </button>
+          </div>
           <div className="w-8 h-1 rounded-full bg-white/20" />
           <div className="relative group" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
             <button

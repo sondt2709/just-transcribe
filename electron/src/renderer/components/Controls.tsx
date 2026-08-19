@@ -1,3 +1,6 @@
+import { useState } from 'react'
+import { copyTranscript, clearTranscript } from '../lib/transcriptActions'
+
 const ASR_LANGUAGES = [
   { code: '', label: 'Auto' },
   { code: 'en', label: 'English' },
@@ -31,6 +34,30 @@ export function Controls({
   onStop,
   onSettingsClick
 }: ControlsProps): JSX.Element {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = async (): Promise<void> => {
+    if (!port) return
+    try {
+      const ok = await copyTranscript(port)
+      if (ok) {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1500)
+      }
+    } catch (err) {
+      console.error('Copy transcript failed:', err)
+    }
+  }
+
+  const handleClear = async (): Promise<void> => {
+    if (!port) return
+    try {
+      await clearTranscript(port)
+    } catch (err) {
+      console.error('Clear transcript failed:', err)
+    }
+  }
+
   return (
     <div className="flex flex-col h-full p-4">
       {/* Status indicators */}
@@ -78,6 +105,31 @@ export function Controls({
               {l.label}
             </button>
           ))}
+        </div>
+      </div>
+
+      {/* Transcript actions */}
+      <div className="mt-4">
+        <label className="block text-xs text-neutral-500 mb-1.5">Transcript</label>
+        <div className="flex gap-1.5">
+          <button
+            onClick={handleCopy}
+            disabled={!port}
+            className={`flex-1 px-2 py-1.5 text-xs rounded border transition-colors ${
+              copied
+                ? 'bg-teal-500/20 text-teal-400 border-teal-500/30'
+                : 'bg-neutral-800 text-neutral-400 hover:text-neutral-200 border-neutral-700'
+            }`}
+          >
+            {copied ? 'Copied ✓' : 'Copy'}
+          </button>
+          <button
+            onClick={handleClear}
+            disabled={!port}
+            className="flex-1 px-2 py-1.5 text-xs rounded bg-neutral-800 text-neutral-400 hover:text-red-400 border border-neutral-700 transition-colors"
+          >
+            Clear
+          </button>
         </div>
       </div>
 

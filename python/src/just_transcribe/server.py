@@ -43,6 +43,10 @@ class AppState:
         # WebSocket clients
         self.ws_clients: set[WebSocket] = set()
 
+        # In-memory transcript history (segments + merged translations),
+        # session-scoped: emptied on clear, not persisted across restarts
+        self.transcript: list[dict] = []
+
     def broadcast(self, event: dict) -> None:
         """Queue a broadcast to all connected WebSocket clients."""
         message = json.dumps(event)
@@ -279,6 +283,16 @@ def create_app(
             return {"models": result.get("models", [])}
         return {"models": [], "error": result.get("error", "Unknown error")}
 
+    @app.get("/api/transcript")
+    async def get_transcript():
+        return {"segments": state.transcript}
+
+    @app.post("/api/transcript/clear")
+    async def clear_transcript():
+        state.transcript.clear()
+        state.broadcast({"type": "clear"})
+        return {"status": "cleared"}
+
     # --- WebSocket ---
 
     @app.websocket("/ws/transcript")
@@ -315,22 +329,27 @@ def _on_interim(state: AppState, data: dict) -> None:
 
 def _on_segment(state: AppState, segment: TranscriptSegment) -> None:
     logger.info("Segment: id=%d lang=%s text=%s", segment.id, segment.lang, segment.text[:50])
-    state.broadcast(
-        {
-            "type": "segment",
-            "id": segment.id,
-            "text": segment.text,
-            "source": segment.source,
-            "speaker": segment.speaker,
-            "lang": segment.lang,
-            "start": round(segment.start, 2),
-            "end": round(segment.end, 2),
-        }
-    )
+    wall_epoch = state.orchestrator.wall_epoch if state.orchestrator else 0.0
+    entry = {
+        "id": segment.id,
+        "text": segment.text,
+        "source": segment.source,
+        "speaker": segment.speaker,
+        "lang": segment.lang,
+        "start": round(segment.start, 2),
+        "end": round(segment.end, 2),
+        "wall_start": round(wall_epoch + segment.start, 3),
+    }
+    state.transcript.append({**entry, "translations": {}})
+    state.broadcast({"type": "segment", **entry})
 
 
 def _on_translation(state: AppState, result: TranslationResult) -> None:
     logger.info("Translation result: segment_id=%d text=%s", result.segment_id, result.translated_text[:50])
+    for entry in reversed(state.transcript):
+        if entry["id"] == result.segment_id:
+            entry["translations"][result.target_lang] = result.translated_text
+            break
     state.broadcast(
         {
             "type": "translate",
