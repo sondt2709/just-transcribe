@@ -101,7 +101,9 @@ Settings are stored in `~/.just-transcribe/config.toml`.
 Remove any or all components independently. Open Terminal and run whichever you need:
 
 ```sh
-# Remove the app
+# Remove the app:
+brew uninstall --cask just-transcribe
+# OR if installed manually:
 rm -rf /Applications/Just\ Transcribe.app
 
 # Remove app data (config, Python environment, logs)
