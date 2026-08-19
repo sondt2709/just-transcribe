@@ -1,6 +1,6 @@
 cask "just-transcribe" do
-  version "0.1.4"
-  sha256 "cb4b8d167d228da095d79acc96b402ded2a5109d8ca0d6fead1cc228ce7b0db8"
+  version "0.1.5"
+  sha256 "88b8dbf2f698e2b729703a8d989ff088b0405c121c2cd02099cbc2bd486d7973"
 
   url "https://github.com/sondt2709/just-transcribe/releases/download/v#{version}/Just.Transcribe-#{version}-arm64.dmg"
   name "Just Transcribe"
@@ -15,4 +15,9 @@ cask "just-transcribe" do
     "~/.just-transcribe",
     "~/Library/Application Support/just-transcribe",
   ]
+
+  caveats <<~EOS
+    App is unsigned. If installed without --no-quarantine, run:
+      xattr -cr "/Applications/Just Transcribe.app"
+  EOS
 end

@@ -19,27 +19,19 @@ Real-time audio transcription and translation for macOS. Captures your microphon
 
 ```sh
 brew tap sondt2709/just-transcribe https://github.com/sondt2709/just-transcribe.git
-brew install --cask just-transcribe
+brew trust sondt2709/just-transcribe   # Homebrew 6.0+ only
+brew install --cask --no-quarantine just-transcribe
 ```
-
-> **Note:** The app is not signed with an Apple certificate yet. After installing, run:
-> ```sh
-> xattr -cr /Applications/Just\ Transcribe.app
-> ```
 
 ### Option B: Manual download
 
-Go to [Releases](https://github.com/sondt2709/just-transcribe/releases) and download the latest `.dmg` file. Open it and drag **Just Transcribe** to your Applications folder.
+Download the latest `.dmg` from [Releases](https://github.com/sondt2709/just-transcribe/releases), drag **Just Transcribe** to Applications, then run:
 
-> **Note:** The app is not signed with an Apple certificate yet. macOS will block it on first launch.
->
-> Open **Terminal** and run:
-> ```sh
-> xattr -cr /Applications/Just\ Transcribe.app
-> ```
-> Then open the app normally. This only needs to be done once.
->
-> **Why?** macOS Sequoia (15.x) removed the right-click → Open bypass and the "Allow Anyway" button in Privacy & Security may not appear for unsigned apps.
+```sh
+xattr -cr /Applications/Just\ Transcribe.app
+```
+
+> The app is not signed with an Apple certificate yet, so macOS blocks quarantined downloads. `--no-quarantine` (Option A) or `xattr -cr` (Option B) clears that. One-time step.
 
 ### Step 2: Install required tools
 
