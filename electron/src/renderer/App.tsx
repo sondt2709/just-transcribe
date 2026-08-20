@@ -32,7 +32,7 @@ export default function App(): JSX.Element {
     },
     [backend.port]
   )
-  const { segments, interim, connected: wsConnected } = useTranscript(backend.port)
+  const { segments, interim, connected: wsConnected, alert, dismissAlert } = useTranscript(backend.port)
 
   useEffect(() => {
     window.api.getSetupStatus().then((status) => {
@@ -65,6 +65,28 @@ export default function App(): JSX.Element {
       <div className="h-8 flex items-center justify-center shrink-0">
         <span className="text-xs text-neutral-500 font-medium">Just Transcribe</span>
       </div>
+
+      {/* Pipeline alert banner */}
+      {alert && (
+        <div
+          className={`flex items-center justify-between px-4 py-2 text-sm shrink-0 no-drag ${
+            alert.kind === 'error'
+              ? 'bg-red-500/10 border-b border-red-500/20 text-red-300'
+              : 'bg-amber-500/10 border-b border-amber-500/20 text-amber-300'
+          }`}
+        >
+          <span>
+            {alert.kind === 'error' ? 'Error: ' : 'Stall: '}
+            {alert.message}
+          </span>
+          <button
+            onClick={dismissAlert}
+            className="ml-4 text-xs opacity-70 hover:opacity-100 transition-opacity"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Main content */}
       <div className="flex-1 flex overflow-hidden">

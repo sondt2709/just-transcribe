@@ -17,16 +17,24 @@ interface InterimState {
   source: string
 }
 
+export interface PipelineAlert {
+  kind: 'error' | 'stall'
+  message: string
+}
+
 interface UseTranscriptReturn {
   segments: Segment[]
   interim: InterimState | null
   connected: boolean
+  alert: PipelineAlert | null
+  dismissAlert: () => void
 }
 
 export function useTranscript(port: number | null): UseTranscriptReturn {
   const [segments, setSegments] = useState<Segment[]>([])
   const [interim, setInterim] = useState<InterimState | null>(null)
   const [connected, setConnected] = useState(false)
+  const [alert, setAlert] = useState<PipelineAlert | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -73,10 +81,12 @@ export function useTranscript(port: number | null): UseTranscriptReturn {
               }
             ])
             setInterim(null)
+            setAlert(null) // pipeline recovered
             break
 
           case 'interim':
             setInterim({ text: data.text, source: data.source })
+            setAlert(null) // pipeline recovered
             break
 
           case 'translate':
@@ -96,6 +106,12 @@ export function useTranscript(port: number | null): UseTranscriptReturn {
 
           case 'error':
             console.error('Backend error:', data.message)
+            setAlert({ kind: 'error', message: data.message })
+            break
+
+          case 'stall':
+            console.warn('Pipeline stall:', data.message)
+            setAlert({ kind: 'stall', message: data.message })
             break
         }
       } catch (err) {
@@ -112,5 +128,7 @@ export function useTranscript(port: number | null): UseTranscriptReturn {
     }
   }, [connect])
 
-  return { segments, interim, connected }
+  const dismissAlert = useCallback(() => setAlert(null), [])
+
+  return { segments, interim, connected, alert, dismissAlert }
 }

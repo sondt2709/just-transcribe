@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { TraceViewer } from './TraceViewer'
 
 interface SettingsProps {
   port: number | null
@@ -19,6 +20,8 @@ interface Config {
   llm_api_key: string
   mic_enabled: boolean
   speaker_enabled: boolean
+  asr_timeout_s: number
+  debug_audio: boolean
 }
 
 const LANGUAGES = [
@@ -48,7 +51,9 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
     llm_model: '',
     llm_api_key: '',
     mic_enabled: true,
-    speaker_enabled: true
+    speaker_enabled: true,
+    asr_timeout_s: 10,
+    debug_audio: false
   })
   const [saving, setSaving] = useState(false)
   const [reinstalling, setReinstalling] = useState(false)
@@ -57,6 +62,7 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
   const [testing, setTesting] = useState(false)
   const [testStatus, setTestStatus] = useState<'idle' | 'ok' | 'error'>('idle')
   const [showUninstall, setShowUninstall] = useState(false)
+  const [showTraceViewer, setShowTraceViewer] = useState(false)
   const [localAsr, setLocalAsr] = useState({ model: '' })
   const [remoteAsr, setRemoteAsr] = useState({ base_url: '', api_key: '', model: '' })
   const [llmRemoteModels, setLlmRemoteModels] = useState<string[]>([])
@@ -414,6 +420,21 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
                   />
                 </Field>
 
+                <Field label="Request Timeout (seconds)" hint="Fail fast if the server hangs — keeps the pipeline responsive">
+                  <input
+                    type="number"
+                    min={1}
+                    max={120}
+                    step={1}
+                    value={config.asr_timeout_s}
+                    onChange={(e) => {
+                      const v = Number(e.target.value)
+                      setConfig({ ...config, asr_timeout_s: Number.isFinite(v) && v > 0 ? v : 10 })
+                    }}
+                    className={inputClass}
+                  />
+                </Field>
+
                 {/* Connection status */}
                 {testStatus === 'ok' && (
                   <div className="flex items-center gap-2 text-xs text-green-400">
@@ -555,7 +576,33 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
             </Field>
           </Section>
 
-          {/* ── Section 5: Maintenance ── */}
+          {/* ── Section 5: Debugging ── */}
+          <Section title="Debugging">
+            <div className="bg-neutral-800/50 border border-neutral-800 rounded-lg p-4 space-y-3">
+              <Field label="Debug Audio Recording" hint="Saves audio sent to ASR under ~/.just-transcribe/sessions/ for troubleshooting">
+                <label className="flex items-center gap-2 text-sm text-neutral-300">
+                  <input
+                    type="checkbox"
+                    checked={config.debug_audio}
+                    onChange={(e) => setConfig({ ...config, debug_audio: e.target.checked })}
+                    className="rounded"
+                  />
+                  Save audio segments for debugging
+                </label>
+              </Field>
+
+              <Field label="Trace Sessions" hint="Browse pipeline trace events, transcripts, and recorded audio per session">
+                <button
+                  onClick={() => setShowTraceViewer(true)}
+                  className="px-4 py-2 text-sm bg-neutral-800 text-neutral-300 border border-neutral-700 rounded-lg hover:bg-neutral-700 transition-colors"
+                >
+                  Open Debug Sessions
+                </button>
+              </Field>
+            </div>
+          </Section>
+
+          {/* ── Section 6: Maintenance ── */}
           <Section title="Maintenance">
             <button
               onClick={async () => {
@@ -604,6 +651,11 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
           </Section>
         </div>
       </div>
+
+      {/* Trace viewer overlay */}
+      {showTraceViewer && (
+        <TraceViewer port={port} onClose={() => setShowTraceViewer(false)} />
+      )}
     </div>
   )
 }

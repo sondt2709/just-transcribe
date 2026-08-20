@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 APP_DIR = Path.home() / ".just-transcribe"
 BIN_DIR = APP_DIR / "bin"
 LOG_DIR = APP_DIR / "logs"
+SESSIONS_DIR = APP_DIR / "sessions"
 CONFIG_FILE = APP_DIR / "config.toml"
 AUDIOTEE_BIN = BIN_DIR / "audiotee"
 
@@ -43,6 +44,8 @@ class AppConfig:
     asr_language: str = ""  # empty = auto-detect, or ISO code like "vi", "en", "zh"
     asr_base_url: str = ""  # remote ASR server URL
     asr_api_key: str = ""  # remote ASR API key
+    asr_timeout_s: float = 10.0  # per-request timeout for remote ASR
+    debug_audio: bool = False  # save ASR input WAVs + stall ring dumps
 
     def to_dict(self) -> dict:
         return {
@@ -58,6 +61,8 @@ class AppConfig:
             "asr_language": self.asr_language,
             "asr_base_url": self.asr_base_url,
             "asr_api_key": self.asr_api_key,
+            "asr_timeout_s": self.asr_timeout_s,
+            "debug_audio": self.debug_audio,
         }
 
     @classmethod
@@ -75,6 +80,8 @@ class AppConfig:
             asr_language=data.get("asr_language", ""),
             asr_base_url=data.get("asr_base_url", ""),
             asr_api_key=data.get("asr_api_key", ""),
+            asr_timeout_s=float(data.get("asr_timeout_s", 10.0)),
+            debug_audio=bool(data.get("debug_audio", False)),
         )
 
 

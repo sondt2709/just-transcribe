@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from collections import deque
 from dataclasses import dataclass
 from typing import Optional
@@ -10,6 +11,7 @@ from typing import Optional
 import httpx
 
 from just_transcribe.pipeline.asr import TranscriptSegment
+from just_transcribe.tracing import NullTracer
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +59,11 @@ class TranslationService:
         self.preferred_language_2 = preferred_language_2
         self._context_window: deque[ContextEntry] = deque(maxlen=4)
         self._client: Optional[httpx.AsyncClient] = None
+        self._tracer = NullTracer()
+
+    def set_tracer(self, tracer) -> None:
+        """Attach a session tracer (or NullTracer when no session is active)."""
+        self._tracer = tracer or NullTracer()
 
     def update_config(
         self,
@@ -92,7 +99,7 @@ class TranslationService:
         return targets
 
     async def translate_multi(
-        self, segment: TranscriptSegment
+        self, segment: TranscriptSegment, trace_id: str = ""
     ) -> list[TranslationResult]:
         """Translate a segment to all applicable targets. Returns results (may be partial on failure)."""
         targets = self.get_translation_targets(segment)
@@ -109,7 +116,7 @@ class TranslationService:
 
         import asyncio
         results = await asyncio.gather(
-            *(self._translate_to(segment, lang) for lang in targets),
+            *(self._translate_to(segment, lang, trace_id) for lang in targets),
             return_exceptions=True,
         )
 
@@ -121,7 +128,7 @@ class TranslationService:
         return valid_results
 
     async def _translate_to(
-        self, segment: TranscriptSegment, target_lang: str
+        self, segment: TranscriptSegment, target_lang: str, trace_id: str = ""
     ) -> Optional[TranslationResult]:
         """Translate a segment to a specific language. Returns None on failure."""
         target_name = LANG_NAMES.get(target_lang, target_lang)
@@ -142,6 +149,20 @@ class TranslationService:
             prompt += f"\n\nPrevious exchanges:\n{context}\n\nTranslate:"
 
         logger.debug("Translation prompt for segment %d to %s:\n%s", segment.id, target_lang, prompt)
+
+        call_fields = {
+            "trace_id": trace_id,
+            "segment_id": segment.id,
+            "target_lang": target_lang,
+            "model": self.model,
+            "context_entries": len(context_lines),
+            "prompt_chars": len(prompt),
+        }
+        # Full prompt persisted only in debug mode (it duplicates transcript content)
+        if self._tracer.debug_audio:
+            call_fields["prompt"] = prompt
+        self._tracer.trace("translate_call", **call_fields)
+        t0 = time.monotonic()
 
         try:
             if self._client is None:
@@ -168,12 +189,22 @@ class TranslationService:
             data = response.json()
             translated = data["choices"][0]["message"]["content"].strip()
 
+            self._tracer.trace(
+                "translate_done", trace_id=trace_id, segment_id=segment.id,
+                target_lang=target_lang, latency_s=round(time.monotonic() - t0, 3),
+                status="ok", text=translated,
+            )
             return TranslationResult(
                 segment_id=segment.id,
                 translated_text=translated,
                 target_lang=target_lang,
             )
         except Exception as e:
+            self._tracer.trace(
+                "translate_done", trace_id=trace_id, segment_id=segment.id,
+                target_lang=target_lang, latency_s=round(time.monotonic() - t0, 3),
+                status="error", error=str(e),
+            )
             logger.warning("Translation to %s failed for segment %d: %s", target_lang, segment.id, e)
             return None
 

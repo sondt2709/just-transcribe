@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 _MAX_RETRIES = 1
 _BACKOFF_BASE_S = 1.0
 _RETRYABLE_STATUS = {429, 500, 502, 503}
-_REQUEST_TIMEOUT_S = 30.0
+_DEFAULT_TIMEOUT_S = 10.0
 
 
 class RemoteASREngine:
@@ -31,11 +31,13 @@ class RemoteASREngine:
         model: str,
         api_key: str = "",
         language: str = "",
+        timeout_s: float = _DEFAULT_TIMEOUT_S,
     ):
         self._base_url = base_url.rstrip("/")
         self._model = model
         self._api_key = api_key
         self._language = language or None  # None = auto-detect
+        self._timeout_s = timeout_s
         self._segment_counter = 0
 
     @property
@@ -101,7 +103,7 @@ class RemoteASREngine:
         for attempt in range(_MAX_RETRIES + 1):
             try:
                 wav_buf.seek(0)
-                with httpx.Client(timeout=_REQUEST_TIMEOUT_S) as client:
+                with httpx.Client(timeout=self._timeout_s) as client:
                     resp = client.post(
                         endpoint,
                         files={"file": ("segment.wav", wav_buf, "audio/wav")},
