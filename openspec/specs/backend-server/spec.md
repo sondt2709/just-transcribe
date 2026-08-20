@@ -38,6 +38,10 @@ The system SHALL expose a WebSocket endpoint at `/ws/transcript` that streams tr
 - **WHEN** an error occurs in the pipeline (audiotee crash, model failure)
 - **THEN** the server broadcasts `{ "type": "error", "message": "..." }` to all connected clients
 
+#### Scenario: Stall event
+- **WHEN** the stall watchdog detects a stalled pipeline
+- **THEN** the server broadcasts `{ "type": "stall", "message": "...", "stage": "..." }` to all connected clients
+
 #### Scenario: Clear event
 - **WHEN** the transcript is cleared via `POST /api/transcript/clear`
 - **THEN** the server broadcasts `{ "type": "clear" }` to all connected clients

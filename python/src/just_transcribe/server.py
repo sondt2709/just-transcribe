@@ -5,21 +5,24 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
 import sounddevice as sd
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 from just_transcribe.audio.stream import AudioStreamManager
-from just_transcribe.config import AppConfig, load_config, save_config
+from just_transcribe.config import SESSIONS_DIR, AppConfig, load_config, save_config
 from just_transcribe.pipeline.asr import ASREngine, ASRProvider, TranscriptSegment
 from just_transcribe.pipeline.asr_remote import RemoteASREngine, test_connection
 from just_transcribe.pipeline.orchestrator import PipelineOrchestrator
 from just_transcribe.pipeline.translate import TranslationResult, TranslationService
 from just_transcribe.pipeline.vad import VoiceActivityDetector
+from just_transcribe.tracing import NullTracer, SessionTracer
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +42,7 @@ class AppState:
         self.translator: Optional[TranslationService] = None
         self.stream_manager: Optional[AudioStreamManager] = None
         self.orchestrator: Optional[PipelineOrchestrator] = None
+        self.tracer = NullTracer()
 
         # WebSocket clients
         self.ws_clients: set[WebSocket] = set()
@@ -50,6 +54,7 @@ class AppState:
     def broadcast(self, event: dict) -> None:
         """Queue a broadcast to all connected WebSocket clients."""
         message = json.dumps(event)
+        self.tracer.trace("broadcast", type=event.get("type"), ws_clients=len(self.ws_clients))
         disconnected = set()
         for ws in self.ws_clients:
             try:
@@ -79,6 +84,7 @@ def create_app(
                 model=cfg.asr_model,
                 api_key=cfg.asr_api_key,
                 language=cfg.asr_language,
+                timeout_s=cfg.asr_timeout_s,
             )
         else:
             logger.info("Using local ASR: %s", cfg.asr_model)
@@ -134,12 +140,16 @@ def create_app(
         mic = body.get("mic", state.config.mic_enabled)
         speaker = body.get("speaker", state.config.speaker_enabled)
 
+        state.tracer = SessionTracer(debug_audio=state.config.debug_audio)
+        state.translator.set_tracer(state.tracer)
+
         state.stream_manager = AudioStreamManager(audiotee_path=state.audiotee_path)
         state.orchestrator = PipelineOrchestrator(
             stream_manager=state.stream_manager,
             vad=state.vad,
             asr=state.asr,
             translator=state.translator,
+            tracer=state.tracer,
         )
 
         # Wire callbacks
@@ -147,6 +157,8 @@ def create_app(
         state.orchestrator.on_interim = lambda data: _on_interim(state, data)
         state.orchestrator.on_translation = lambda tr: _on_translation(state, tr)
         state.orchestrator.on_error = lambda msg: _on_error(state, msg)
+        state.orchestrator.on_stall = lambda data: _on_stall(state, data)
+        state.orchestrator.set_ws_client_count(lambda: len(state.ws_clients))
 
         try:
             await state.orchestrator.start(mic=mic, speaker=speaker)
@@ -155,6 +167,9 @@ def create_app(
             return {"status": "recording"}
         except Exception as e:
             logger.error("Failed to start recording: %s", e)
+            state.translator.set_tracer(None)
+            state.tracer.close()
+            state.tracer = NullTracer()
             return {"status": "error", "message": str(e)}
 
     @app.post("/api/stop")
@@ -165,6 +180,9 @@ def create_app(
         await state.orchestrator.stop()
         state.recording = False
         state.broadcast({"type": "status", "state": "stopped"})
+        state.translator.set_tracer(None)
+        state.tracer.close()
+        state.tracer = NullTracer()
         return {"status": "stopped"}
 
     @app.get("/api/status")
@@ -205,6 +223,7 @@ def create_app(
             or new_config.asr_base_url != state.config.asr_base_url
             or new_config.asr_model != state.config.asr_model
             or new_config.asr_api_key != state.config.asr_api_key
+            or new_config.asr_timeout_s != state.config.asr_timeout_s
         )
 
         # Reject provider type switch while recording
@@ -293,6 +312,43 @@ def create_app(
         state.broadcast({"type": "clear"})
         return {"status": "cleared"}
 
+    # --- Trace sessions (read-only) ---
+
+    @app.get("/api/sessions")
+    async def list_sessions():
+        loop = asyncio.get_running_loop()
+        sessions = await loop.run_in_executor(None, _scan_sessions)
+        return {"sessions": sessions}
+
+    @app.get("/api/sessions/{name}/events")
+    async def session_events(name: str, types: str = ""):
+        session_dir = _resolve_session(name)
+        loop = asyncio.get_running_loop()
+        events = await loop.run_in_executor(None, _read_events, session_dir / "events.jsonl")
+
+        if types:
+            names = [t.strip() for t in types.split(",") if t.strip()]
+            excludes = {t[1:] for t in names if t.startswith("-")}
+            includes = {t for t in names if not t.startswith("-")}
+            if excludes:
+                events = [e for e in events if e.get("event") not in excludes]
+            if includes:
+                events = [e for e in events if e.get("event") in includes]
+        return {"events": events}
+
+    @app.get("/api/sessions/{name}/audio/{filename}")
+    async def session_audio(name: str, filename: str):
+        session_dir = _resolve_session(name)
+        segments_dir = (session_dir / "segments").resolve()
+        path = (segments_dir / filename).resolve()
+        if (
+            not filename.endswith(".wav")
+            or not path.is_relative_to(segments_dir)
+            or not path.is_file()
+        ):
+            raise HTTPException(status_code=404, detail="Audio file not found")
+        return FileResponse(path, media_type="audio/wav")
+
     # --- WebSocket ---
 
     @app.websocket("/ws/transcript")
@@ -313,6 +369,69 @@ def create_app(
             )
 
     return app
+
+
+_SESSION_NAME_RE = re.compile(r"^\d{8}-\d{6}$")
+
+
+def _resolve_session(name: str) -> Path:
+    """Validate a session name and return its directory, or raise 404."""
+    if not _SESSION_NAME_RE.match(name):
+        raise HTTPException(status_code=404, detail="Session not found")
+    session_dir = SESSIONS_DIR / name
+    if not session_dir.is_dir() or not (session_dir / "events.jsonl").is_file():
+        raise HTTPException(status_code=404, detail="Session not found")
+    return session_dir
+
+
+def _read_events(path: Path) -> list[dict]:
+    events = []
+    try:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                try:
+                    events.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+    except OSError:
+        pass
+    return events
+
+
+def _scan_sessions() -> list[dict]:
+    if not SESSIONS_DIR.exists():
+        return []
+    sessions = []
+    for d in sorted(SESSIONS_DIR.iterdir(), key=lambda p: p.name, reverse=True):
+        if not d.is_dir() or not _SESSION_NAME_RE.match(d.name):
+            continue
+        events_path = d / "events.jsonl"
+        if not events_path.is_file():
+            continue
+        try:
+            events = _read_events(events_path)
+            if not events:
+                continue
+            timestamps = [e["ts"] for e in events if isinstance(e.get("ts"), (int, float))]
+            segments_dir = d / "segments"
+            wavs = list(segments_dir.glob("*.wav")) if segments_dir.is_dir() else []
+            size = events_path.stat().st_size + sum(w.stat().st_size for w in wavs)
+            sessions.append({
+                "name": d.name,
+                "event_count": len(events),
+                "duration_s": round(max(timestamps) - min(timestamps), 1) if timestamps else 0,
+                "stalls": sum(1 for e in events if e.get("event") == "stall"),
+                "errors": sum(
+                    1 for e in events
+                    if str(e.get("event", "")).endswith("_error")
+                    or (e.get("event") == "translate_done" and e.get("status") == "error")
+                ),
+                "wav_count": len(wavs),
+                "size_bytes": size,
+            })
+        except Exception as e:
+            logger.warning("Skipping unreadable session %s: %s", d.name, e)
+    return sessions
 
 
 def _on_interim(state: AppState, data: dict) -> None:
@@ -362,3 +481,7 @@ def _on_translation(state: AppState, result: TranslationResult) -> None:
 
 def _on_error(state: AppState, message: str) -> None:
     state.broadcast({"type": "error", "message": message})
+
+
+def _on_stall(state: AppState, data: dict) -> None:
+    state.broadcast({"type": "stall", "message": data["message"], "stage": data["stage"]})

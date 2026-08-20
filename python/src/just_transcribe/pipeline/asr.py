@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from dataclasses import dataclass
 from typing import Optional, Protocol, runtime_checkable
@@ -54,6 +55,19 @@ class ASREngine:
         self._model = None
         self._segment_counter = 0
         self._loaded = False
+        # MLX/Metal doesn't support concurrent GPU access — serialize here,
+        # not in the orchestrator, so remote providers aren't serialized.
+        self._gpu_lock = threading.Lock()
+        self._lock_acquired_at: Optional[float] = None
+        self.last_lock_wait_s: float = 0.0
+
+    @property
+    def lock_held_s(self) -> float:
+        """How long the current GPU lock holder has held it (0 if free)."""
+        acquired = self._lock_acquired_at
+        if acquired is None:
+            return 0.0
+        return time.monotonic() - acquired
 
     def load_model(self) -> None:
         """Load the ASR model. Call once at startup."""
@@ -95,7 +109,14 @@ class ASREngine:
             raise RuntimeError("ASR model not loaded. Call load_model() first.")
 
         try:
-            result = self._model.generate(audio, language=self._language)
+            wait_start = time.monotonic()
+            with self._gpu_lock:
+                self.last_lock_wait_s = time.monotonic() - wait_start
+                self._lock_acquired_at = time.monotonic()
+                try:
+                    result = self._model.generate(audio, language=self._language)
+                finally:
+                    self._lock_acquired_at = None
 
             text = result.text.strip()
             if not text:
