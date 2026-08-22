@@ -76,7 +76,7 @@ export function Setup({ onComplete }: SetupProps): JSX.Element {
   const currentStep = !providerChosen ? 1 : !toolsReady ? 2 : !modelReady ? 3 : 4
 
   return (
-    <div className="h-screen flex items-center justify-center no-drag">
+    <div className="h-screen flex items-center justify-center bg-neutral-950 no-drag">
       <div className="w-[520px] p-8">
         <h1 className="text-2xl font-bold text-neutral-100 mb-2">Just Transcribe</h1>
         <p className="text-sm text-neutral-400 mb-8">
