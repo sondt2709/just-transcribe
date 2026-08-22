@@ -51,6 +51,11 @@
         {
           "from": "../python/pyproject.toml",
           "to": "python/pyproject.toml"
+        },
+        {
+          "from": "resources",
+          "to": ".",
+          "filter": ["tray*.png"]
         }
       ]
     }
