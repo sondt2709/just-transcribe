@@ -1,0 +1,32 @@
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#009688;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#00695C;stop-opacity:1"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background with macOS-style rounded corners -->
+  <rect width="100" height="100" rx="22" ry="22" fill="url(#bgGrad)"/>
+
+  <!-- Microphone body -->
+  <rect x="41" y="18" width="18" height="28" rx="9" ry="9" fill="white" opacity="0.95"/>
+
+  <!-- Microphone stand arc -->
+  <path d="M28 44 Q28 60 50 60 Q72 60 72 44" stroke="white" stroke-width="3.5" fill="none" stroke-linecap="round" opacity="0.95"/>
+
+  <!-- Microphone pole -->
+  <line x1="50" y1="60" x2="50" y2="68" stroke="white" stroke-width="3.5" stroke-linecap="round" opacity="0.95"/>
+
+  <!-- Microphone base -->
+  <line x1="40" y1="68" x2="60" y2="68" stroke="white" stroke-width="3.5" stroke-linecap="round" opacity="0.95"/>
+
+  <!-- Text lines -->
+  <rect x="20" y="76" width="35" height="3.5" rx="1.75" fill="white" opacity="0.7"/>
+  <rect x="20" y="83" width="25" height="3.5" rx="1.75" fill="white" opacity="0.5"/>
+
+  <!-- Soundwave bars -->
+  <rect x="62" y="74" width="3" height="12" rx="1.5" fill="white" opacity="0.9"/>
+  <rect x="68" y="77" width="3" height="7" rx="1.5" fill="white" opacity="0.7"/>
+  <rect x="74" y="75" width="3" height="10" rx="1.5" fill="white" opacity="0.5"/>
+</svg>

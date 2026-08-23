@@ -25,5 +25,21 @@ __pycache__/
 .env
 .env.*
 
+# Android / KMP / Flutter
+kmp/.gradle/
+kmp/.kotlin/
+kmp/**/build/
+kmp/local.properties
+kmp/keystore.properties
+kmp/release.keystore
+*.apk
+*.aab
+*.tsbuildinfo
+flutter/.dart_tool/
+flutter/build/
+flutter/**/build/
+flutter/android/local.properties
+flutter/.flutter-plugins-dependencies
+
 # Lock files (platform-specific)
 uv.lock
