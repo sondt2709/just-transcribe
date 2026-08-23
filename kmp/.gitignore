@@ -1,0 +1,14 @@
+# Gradle / build
+build/
+**/build/
+.gradle/
+.kotlin/
+
+# Local machine config & signing secrets (do not commit)
+local.properties
+release.keystore
+keystore.properties
+
+# Build artifacts
+*.apk
+*.aab
