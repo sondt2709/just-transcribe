@@ -68,7 +68,6 @@ private fun checkModel(r: AsrClient.ConnTest, model: String): ModelCheck = when 
 fun SettingsScreen(
     container: AppContainer,
     config: AppConfig,
-    canClose: Boolean,
     onClose: () -> Unit,
     onOpenDebug: () -> Unit = {},
 ) {
@@ -107,7 +106,7 @@ fun SettingsScreen(
 
     fun persist(close: Boolean) = scope.launch {
         container.saveConfig(draft)
-        if (close && canClose) onClose()
+        if (close) onClose()
     }
 
     fun saveWithVerification(close: Boolean) {
@@ -125,7 +124,7 @@ fun SettingsScreen(
         if (dirty) exitDialog = true else onClose()
     }
 
-    BackHandler(enabled = canClose) { requestExit() }
+    BackHandler { requestExit() }
 
     Scaffold(
         modifier = Modifier.imePadding(),
@@ -133,10 +132,8 @@ fun SettingsScreen(
             TopAppBar(
                 title = { Text("Settings") },
                 navigationIcon = {
-                    if (canClose) {
-                        IconButton(onClick = { requestExit() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                        }
+                    IconButton(onClick = { requestExit() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
             )
@@ -144,11 +141,21 @@ fun SettingsScreen(
         bottomBar = {
             // Pinned above the keyboard so Save is always reachable while editing.
             Surface(tonalElevation = 3.dp) {
-                Button(
-                    onClick = { saveWithVerification(close = false) },
-                    enabled = draft.isAsrConfigured && !saving,
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                ) { Text(if (saving) "Verifying…" else "Save") }
+                Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                    Button(
+                        onClick = { saveWithVerification(close = false) },
+                        enabled = draft.isAsrConfigured && !saving,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text(if (saving) "Verifying…" else "Save") }
+                    if (!draft.isAsrConfigured) {
+                        Text(
+                            "To save, fill in: ${draft.missingAsrFields().joinToString(", ")}",
+                            Modifier.padding(top = 4.dp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
             }
         },
     ) { padding ->

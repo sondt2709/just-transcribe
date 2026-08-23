@@ -27,7 +27,7 @@
 - **Single-result auto-select**: in both Test Connection handlers, `if (r.models.size == 1) draft = draft.copy(<model> = r.models.single())`. Multi-result keeps current selection and feeds the dropdown (existing behavior).
 - **Draft init race fix (opportunistic)**: keep `remember(config)` but the pinned-bar refactor must not change the reset semantics; acceptable because the dirty-dialog now protects user edits from silent loss in every navigation path.
 
-- **Key-value backup for freshness**: full-data Auto Backup uploads ~daily, so a save shortly before uninstall restored stale settings. A `BackupAgentHelper` + `FileBackupHelper` on `datastore/settings.preferences_pb` (registered via `android:backupAgent`) switches settings to key-value mode, and `BackupManager.dataChanged()` after every save queues a prompt backup pass. Alternative — disabling backup — rejected: user wants last-saved settings to survive reinstall.
+- **Default Auto Backup, no app-side backup code**: settings ride Android's full-data Auto Backup (DataStore file included by default). A key-value agent + `dataChanged()` variant was tried for fresher uploads and reverted by user decision — less code to maintain outweighs upload freshness; the ~daily upload staleness window is accepted. Alternatives rejected: key-value agent (maintenance), Block Store (extra dependency for a guarantee no longer wanted), disabling backup (loses reinstall restore).
 
 ## Risks / Trade-offs
 

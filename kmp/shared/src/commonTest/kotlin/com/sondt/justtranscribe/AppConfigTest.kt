@@ -18,4 +18,14 @@ class AppConfigTest {
         assertFalse(c.isAsrConfigured)
         assertFalse(c.isLlmConfigured)
     }
+
+    @Test
+    fun missingAsrFieldsNamesEmptyMandatoryFields() {
+        assertEquals(listOf("ASR base URL"), AppConfig().missingAsrFields())
+        assertEquals(
+            listOf("ASR base URL", "ASR model"),
+            AppConfig(asrModel = "").missingAsrFields(),
+        )
+        assertEquals(emptyList(), AppConfig(asrBaseUrl = "http://x", asrModel = "m").missingAsrFields())
+    }
 }

@@ -1,7 +1,6 @@
 package com.sondt.justtranscribe
 
 import android.app.Application
-import android.app.backup.BackupManager
 import android.content.Context
 import android.util.Log
 import com.sondt.justtranscribe.debug.FileTracer
@@ -144,12 +143,7 @@ class AppContainer(private val appContext: Context) {
         return true
     }
 
-    suspend fun saveConfig(c: AppConfig) {
-        settingsStore.save(c)
-        // Queue a key-value backup pass so a reinstall restores this save,
-        // not whatever stale snapshot Auto Backup uploaded last.
-        BackupManager(appContext).dataChanged()
-    }
+    suspend fun saveConfig(c: AppConfig) = settingsStore.save(c)
 
     suspend fun testConnection(url: String, apiKey: String) = asr.testConnection(url, apiKey)
 }

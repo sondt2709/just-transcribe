@@ -23,6 +23,12 @@ data class AppConfig(
     val isAsrConfigured: Boolean get() = asrBaseUrl.isNotEmpty() && asrModel.isNotEmpty()
     val isLlmConfigured: Boolean get() = llmApiBase.isNotEmpty() && llmModel.isNotEmpty()
 
+    /** Display names of the empty mandatory fields; empty when [isAsrConfigured]. */
+    fun missingAsrFields(): List<String> = buildList {
+        if (asrBaseUrl.isEmpty()) add("ASR base URL")
+        if (asrModel.isEmpty()) add("ASR model")
+    }
+
     companion object {
         const val DEFAULT_ASR_MODEL = "Qwen/Qwen3-ASR-1.7B"
         const val DEFAULT_LLM_MODEL = "Qwen/Qwen3-30B-A3B"

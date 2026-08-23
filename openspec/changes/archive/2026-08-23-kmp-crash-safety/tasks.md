@@ -15,4 +15,4 @@
 ## 3. Verification
 
 - [x] 3.1 Run shared unit tests (`./gradlew :shared:testDebugUnitTest` or equivalent) — all green
-- [ ] 3.2 Build debug APK; manual matrix on device: kill app mid-recording → reopen shows idle + no notification; revoke mic mid-recording (or trigger capture failure) → error banner, notification gone, app alive
+- [x] 3.2 Build debug APK; manual matrix on device: kill app mid-recording → reopen shows idle + no notification; revoke mic mid-recording (or trigger capture failure) → error banner, notification gone, app alive

@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalIconButton
@@ -68,6 +69,7 @@ import kotlinx.coroutines.launch
 fun HomeScreen(
     state: UiState,
     configured: Boolean,
+    missingFields: List<String>,
     hasHistory: Boolean,
     onToggle: () -> Unit,
     onResume: () -> Unit,
@@ -114,8 +116,15 @@ fun HomeScreen(
                     ) {
                         Icon(Icons.Filled.Share, contentDescription = "Share transcript")
                     }
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Filled.Settings, contentDescription = "Settings")
+                    if (configured) {
+                        IconButton(onClick = onOpenSettings) {
+                            Icon(Icons.Filled.Settings, contentDescription = "Settings")
+                        }
+                    } else {
+                        // Highlighted while unconfigured: this is the fix path.
+                        FilledIconButton(onClick = onOpenSettings) {
+                            Icon(Icons.Filled.Settings, contentDescription = "Settings")
+                        }
                     }
                 },
             )
@@ -125,11 +134,7 @@ fun HomeScreen(
         Box(Modifier.padding(padding).fillMaxSize()) {
             Column(Modifier.fillMaxSize()) {
                 if (!configured) {
-                    Text(
-                        "Configure an ASR server in Settings to start.",
-                        Modifier.padding(16.dp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    OnboardingCard(missingFields, onOpenSettings)
                 }
                 if (state.consecutiveFailures >= 3) {
                     Surface(color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth()) {
@@ -193,7 +198,8 @@ private fun RecordControls(
         }
         Spacer(Modifier.width(20.dp))
         FilledIconButton(
-            onClick = { if (configured) onToggle() },
+            onClick = onToggle,
+            enabled = configured,
             modifier = Modifier.size(80.dp),
             colors = IconButtonDefaults.filledIconButtonColors(
                 containerColor = if (state.isRunning) {
@@ -266,6 +272,28 @@ private fun SpeakingBars(active: Boolean, color: Color, modifier: Modifier = Mod
                     .clip(RoundedCornerShape(3.dp))
                     .background(color),
             )
+        }
+    }
+}
+
+/**
+ * Neutral onboarding card shown until the ASR server is configured — a welcome,
+ * not an error: nothing is wrong, the user just hasn't set up yet.
+ */
+@Composable
+private fun OnboardingCard(missingFields: List<String>, onOpenSettings: () -> Unit) {
+    Card(Modifier.fillMaxWidth().padding(16.dp)) {
+        Column(Modifier.padding(16.dp)) {
+            Text("Welcome to Just Transcribe", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Live transcription runs against your own ASR server. " +
+                    "To get started, set up the ${missingFields.joinToString(" and the ")}.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(12.dp))
+            Button(onClick = onOpenSettings) { Text("Open Settings") }
         }
     }
 }

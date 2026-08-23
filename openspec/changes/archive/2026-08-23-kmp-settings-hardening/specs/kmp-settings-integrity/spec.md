@@ -9,12 +9,12 @@ On a fresh install (no persisted or backup-restored settings), `asrModel` SHALL 
 - **WHEN** the app starts with no stored settings
 - **THEN** Settings shows the two model names pre-filled and both base-URL fields empty
 
-### Requirement: Restored settings reflect the last save
-Settings SHALL be backed up in key-value mode with the backup manager notified (`dataChanged()`) on every save, so a reinstall restores the most recently saved configuration rather than a stale snapshot (actual upload timing remains system-scheduled).
+### Requirement: Settings survive reinstall via platform Auto Backup
+Settings SHALL rely on Android's default full-data Auto Backup (no custom backup agent, no manual backup scheduling code). A reinstall restores the most recent snapshot the system uploaded; upload timing is owned by the platform (roughly daily, idle + Wi-Fi), and that staleness window is accepted.
 
-#### Scenario: Reinstall after changing the model
-- **WHEN** the user saves a new model name, the system runs its queued backup pass, and the app is uninstalled and reinstalled
-- **THEN** Settings shows the model saved last, not an earlier value
+#### Scenario: Reinstall restores the last uploaded snapshot
+- **WHEN** the system has completed a backup pass after a save and the app is uninstalled and reinstalled
+- **THEN** Settings shows the values from that snapshot without any app-side backup code involved
 
 ### Requirement: Single probe result auto-selects
 For both the ASR and LLM sections, when Test Connection returns exactly one model id, that model SHALL be auto-selected into the draft configuration (replacing the current draft value). With more than one result the current selection is kept and the list is offered.

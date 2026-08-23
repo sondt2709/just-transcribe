@@ -8,4 +8,4 @@
 ## 2. Verify
 
 - [x] 2.1 Build debug + release APKs — green
-- [ ] 2.2 On-device check: Android 12+ shows wallpaper-derived colors (and themed icon still works); dark mode switches scheme; stop button stays red
+- [x] 2.2 On-device check: Android 12+ shows wallpaper-derived colors (and themed icon still works); dark mode switches scheme; stop button stays red

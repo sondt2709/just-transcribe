@@ -127,11 +127,10 @@ fun AppRoot(container: AppContainer, onStart: () -> Unit, onStop: () -> Unit) {
 
     if (showDebug) {
         DebugSessionsScreen(onClose = { showDebug = false })
-    } else if (showSettings || !config.isAsrConfigured) {
+    } else if (showSettings) {
         SettingsScreen(
             container = container,
             config = config,
-            canClose = config.isAsrConfigured,
             onClose = { showSettings = false },
             onOpenDebug = { showDebug = true },
         )
@@ -139,6 +138,7 @@ fun AppRoot(container: AppContainer, onStart: () -> Unit, onStop: () -> Unit) {
         HomeScreen(
             state = state,
             configured = config.isAsrConfigured,
+            missingFields = config.missingAsrFields(),
             hasHistory = hasHistory,
             onToggle = {
                 if (state.isRunning) {
