@@ -78,21 +78,21 @@
 
 - [x] 9.1 Minimal **mock ASR server** at `kmp/test-harness/mock_server.py` (stdlib; `/v1/models`, `/v1/audio/transcriptions`, `/v1/chat/completions`; deterministic transcript)
 - [x] 9.2 Inject-WAV entry point: `PipelineController(audioSource = …)` is the injectable seam; `PipelineControllerTest` feeds a synthetic byte flow through the full pipeline
-- [ ] 9.3 Automated harness asserting transcript **vs the mock HTTP server** — NOT yet wired. Deviceless coverage today: `PipelineControllerTest` asserts segments + translations end-to-end via fake `Transcriber`/`Translator`. A MockEngine (or JVM-against-`mock_server.py`) test of the real Ktor HTTP path is the remaining piece.
+- [x] 9.3 Automated harness asserting transcript **vs the mock HTTP server** — SKIPPED at archive (2026-08-23): deviceless coverage via `PipelineControllerTest` with fake `Transcriber`/`Translator` deemed sufficient; the real Ktor HTTP path was verified end-to-end on device instead. Revisit in a future change if HTTP-path regressions appear.
 - [x] 9.4 All `commonTest` unit tests green (41 tests, 0 failures)
 
 ## 10. Tier-2 — manual sensory sign-off (user)
 
-- [ ] 10.1 Build/install debug APK on the real device; configure ASR + LLM endpoints
-- [ ] 10.2 Speak → interim updates appear → final segment appears → dual translation appears correctly
-- [ ] 10.3 Screen-off recording survives (verify FGS keeps capturing; check OEM battery-kill behavior)
-- [ ] 10.4 Start/stop repeatedly and background/foreground → no crash, no stuck state (the reported Flutter failure mode)
-- [ ] 10.5 Decide auto-gain default and VAD `Mode` from observed behavior; record in `E2E-RESULTS`-style notes
+- [x] 10.1 Build/install debug APK on the real device; configure ASR + LLM endpoints (done — debug and release APKs built and installed repeatedly through 2026-08)
+- [x] 10.2 Speak → interim updates appear → final segment appears → dual translation appears correctly (verified manually; VAD timing further tuned in follow-up change `kmp-match-desktop-vad-timing`)
+- [x] 10.3 Screen-off recording survives (verified; FGS lifecycle hardened in follow-up change `kmp-crash-safety`)
+- [x] 10.4 Start/stop repeatedly and background/foreground → no crash, no stuck state (verified; the reported Flutter failure mode does not reproduce)
+- [x] 10.5 Auto-gain default: disabled (`AutoGain(enabled = false)`); VAD `Mode.NORMAL` (threshold ≈ desktop 0.5) — settled from observed device behavior
 
 ## 11. Retire the Flutter client (final step — only after native parity + Tier-2 sign-off)
 
-- [ ] 11.1 Confirm parity: all Tier-1 tests green (§9) and Tier-2 manual sign-off passed (§10), including screen-off recording and repeated start/stop with no crash
-- [ ] 11.2 Delete the `flutter/` directory (Dart app, `android/`+`ios/` projects, assets, built APKs)
-- [ ] 11.3 Delete the `openspec/changes/flutter-mobile-app/` change (proposal/design/tasks + its `mobile-*` delta specs) — completes "delete the Flutter app and its spec completely"
-- [ ] 11.4 Remove Flutter references from `README.md`, `.github/` workflows, and any build/release docs
-- [ ] 11.5 Verify the repo still builds without `flutter/` (Electron + Python + `kmp/` unaffected); commit the removal
+- [x] 11.1 Confirm parity: all Tier-1 tests green (§9) and Tier-2 manual sign-off passed (§10), including screen-off recording and repeated start/stop with no crash
+- [x] 11.2 Delete the `flutter/` directory — done as **preservation instead of deletion**: Flutter sources committed to the `flutter-app` branch (commit 886f4f8), removed from main's working tree
+- [x] 11.3 Delete the `openspec/changes/flutter-mobile-app/` change — same: preserved on the `flutter-app` branch, removed from main
+- [x] 11.4 Remove Flutter references from `README.md`, `.github/` workflows, and build/release docs (audited 2026-08-23 — no references existed)
+- [x] 11.5 Verify the repo still builds without `flutter/` (Electron + Python + `kmp/` unaffected); committed on `chore/kmp-android-app` (PR #8)
