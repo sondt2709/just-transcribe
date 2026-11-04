@@ -38,6 +38,10 @@ The overlay window SHALL support 9 placement positions arranged in a 3x3 grid: t
 - **WHEN** the user selects a different position in the settings 3x3 grid picker
 - **THEN** the overlay moves to the new position on the display that holds the overlay, and the preference and the resulting placement are saved to config.toml
 
+#### Scenario: Position persistence
+- **WHEN** the app restarts and the user had previously set overlay position to "top-right"
+- **THEN** the overlay appears at top-right when next shown
+
 #### Scenario: Grid pick on a secondary display
 - **WHEN** the overlay is on a secondary display and the user selects "bottom-right" in the grid picker
 - **THEN** the overlay moves to the bottom-right of the secondary display's work area, not of the primary display

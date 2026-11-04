@@ -44,7 +44,9 @@ If a display with the saved `displayId` exists, the overlay goes there. If not, 
 ### 4. When to save
 - Save on the window `moved` and `resized` events.
 - Do not save when the app moved the window itself (`setBounds` from placement code). A short suppress window after each programmatic `setBounds` handles this.
-- Do not save when the saved display is missing, unless the user started the move (`will-move` / `will-resize`). This stops the macOS relocation on an unplug from overwriting the saved monitor. A user drag on the laptop while the monitor is unplugged still saves.
+- Do not save a move that the user did not start (no `will-move` / `will-resize`) when the saved display is missing or when a display event came less than 1.5 s ago. This stops the macOS relocation on an unplug from overwriting the saved monitor. A user drag on the laptop while the monitor is unplugged still saves.
+- On macOS, `moved` fires during the whole drag, so the save waits 400 ms after the last event.
+- On macOS, a `setBounds` from code that changes the size emits only `resize`, not `moved` or `resized`. The grid pick therefore saves its placement explicitly.
 
 ### 5. Display events
 On `display-added`, `display-removed` and `display-metrics-changed`, the app waits 300 ms (debounce), resolves the placement again from the saved config and the current displays, and calls `setBounds` if the result differs.

@@ -25,6 +25,6 @@
 ## 5. Verification
 
 - [x] 5.1 `npm run build` passes
-- [ ] 5.2 Real app via the main-process debugger: grid pick on the secondary display stays there; restart restores the secondary display
-- [ ] 5.3 Real app screenshots before and after with the same spoken sentence
-- [ ] 5.4 Package the DMG and install the app for the human's unplug/replug test
+- [x] 5.2 Real app via the main-process debugger: grid pick on the secondary display stays there; restart restores the secondary display
+- [x] 5.3 Real app screenshots before and after with the same spoken sentence
+- [x] 5.4 Package the DMG and install the app for the human's unplug/replug test
