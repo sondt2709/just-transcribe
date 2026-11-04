@@ -16,6 +16,17 @@ import {
   writeBackendVersion
 } from './setup'
 import { createTray, updateTrayState, destroyTray } from './tray'
+import {
+  resolveOverlayBounds,
+  gridBoundsForOverlay,
+  displayForBounds,
+  placementFromBounds,
+  parsePlacement,
+  serializePlacement,
+  type DisplayInfo,
+  type Rect,
+  type SavedPlacement
+} from './overlayPlacement'
 
 let mainWindow: BrowserWindow | null = null
 let overlayWindow: BrowserWindow | null = null
@@ -28,25 +39,84 @@ function getElectronRoot(): string {
   return is.dev ? join(__dirname, '..', '..') : app.getAppPath()
 }
 
-// ── Position calculator for 9-grid overlay placement ──
+// ── Overlay placement ──
 
-const OVERLAY_WIDTH_RATIO = 0.3
-const OVERLAY_HEIGHT_RATIO = 0.5
+// The overlay saves its display and position when the user drags or resizes it,
+// and goes back there on launch and when displays are added, removed or resized.
 
-function calculateOverlayBounds(position: string): { x: number; y: number; width: number; height: number } {
-  const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize
-  const { x: ox, y: oy } = screen.getPrimaryDisplay().workArea
-  const w = Math.round(sw * OVERLAY_WIDTH_RATIO)
-  const h = Math.round(sh * OVERLAY_HEIGHT_RATIO)
+const PLACEMENT_SAVE_DELAY_MS = 400 // 'moved' fires during the whole drag on macOS
+const PROGRAMMATIC_MOVE_GRACE_MS = 500
+const DISPLAY_CHANGE_DELAY_MS = 300
+const DISPLAY_CHANGE_GRACE_MS = 1500 // macOS moves windows itself around a display change
 
-  const col = position.includes('left') ? 0 : position.includes('right') ? 2 : 1
-  const row = position.includes('top') ? 0 : position.includes('bottom') || position.startsWith('bot') ? 2 : 1
+let ignoreOverlayMovesUntil = 0
+let lastDisplayChangeAt = 0
+let userAdjustingOverlay = false
+let placementSaveTimer: ReturnType<typeof setTimeout> | null = null
+let displayChangeTimer: ReturnType<typeof setTimeout> | null = null
 
-  const margin = 20
-  const xPositions = [ox + margin, ox + Math.round((sw - w) / 2), ox + sw - w - margin]
-  const yPositions = [oy + margin, oy + Math.round((sh - h) / 2), oy + sh - h - margin]
+function displayInfos(): DisplayInfo[] {
+  return screen.getAllDisplays().map((d) => ({ id: d.id, workArea: d.workArea }))
+}
 
-  return { x: xPositions[col], y: yPositions[row], width: w, height: h }
+function readSavedPlacement(): SavedPlacement | null {
+  const cfg = readElectronConfig()
+  return parsePlacement(cfg.overlay_display_id, cfg.overlay_bounds)
+}
+
+function resolveCurrentOverlayBounds(): Rect {
+  return resolveOverlayBounds({
+    saved: readSavedPlacement(),
+    displays: displayInfos(),
+    primaryId: screen.getPrimaryDisplay().id,
+    position: readElectronConfig().overlay_position
+  })
+}
+
+function savePlacementFromBounds(bounds: Rect): void {
+  const display = displayForBounds(bounds, displayInfos(), screen.getPrimaryDisplay().id)
+  writeElectronConfig(serializePlacement(placementFromBounds(bounds, display)))
+}
+
+/** Move the overlay from code. These moves do not overwrite the saved placement. */
+function setOverlayBoundsFromCode(bounds: Rect): void {
+  if (!overlayWindow || overlayWindow.isDestroyed()) return
+  ignoreOverlayMovesUntil = Date.now() + PROGRAMMATIC_MOVE_GRACE_MS
+  overlayWindow.setBounds(bounds)
+}
+
+function onOverlayMovedOrResized(): void {
+  if (!userAdjustingOverlay && Date.now() < ignoreOverlayMovesUntil) return
+  if (placementSaveTimer) clearTimeout(placementSaveTimer)
+  placementSaveTimer = setTimeout(() => {
+    placementSaveTimer = null
+    const userInitiated = userAdjustingOverlay
+    userAdjustingOverlay = false
+    if (!overlayWindow || overlayWindow.isDestroyed()) return
+    if (!userInitiated) {
+      // A move that the user did not start comes from macOS (display change).
+      // Keep the saved placement while its display is missing or just changed.
+      if (Date.now() - lastDisplayChangeAt < DISPLAY_CHANGE_GRACE_MS) return
+      const saved = readSavedPlacement()
+      if (saved && !displayInfos().some((d) => d.id === saved.displayId)) return
+    }
+    savePlacementFromBounds(overlayWindow.getBounds())
+  }, PLACEMENT_SAVE_DELAY_MS)
+}
+
+function onDisplaysChanged(): void {
+  lastDisplayChangeAt = Date.now()
+  if (displayChangeTimer) clearTimeout(displayChangeTimer)
+  displayChangeTimer = setTimeout(() => {
+    displayChangeTimer = null
+    lastDisplayChangeAt = Date.now()
+    if (!overlayWindow || overlayWindow.isDestroyed()) return
+    const target = resolveCurrentOverlayBounds()
+    const now = overlayWindow.getBounds()
+    if (target.x !== now.x || target.y !== now.y || target.width !== now.width || target.height !== now.height) {
+      setOverlayBoundsFromCode(target)
+    }
+  }, DISPLAY_CHANGE_DELAY_MS)
 }
 
 // ── Window creation ──
@@ -91,8 +161,7 @@ function createMainWindow(): void {
 }
 
 function createOverlayWindow(): void {
-  const config = readElectronConfig()
-  const bounds = calculateOverlayBounds(config.overlay_position)
+  const bounds = resolveCurrentOverlayBounds()
 
   overlayWindow = new BrowserWindow({
     ...bounds,
@@ -125,6 +194,16 @@ function createOverlayWindow(): void {
   overlayWindow.webContents.on('did-finish-load', () => {
     applyOverlayInteractionMode()
   })
+
+  // 'will-move' / 'will-resize' fire only for moves and resizes that the user starts.
+  overlayWindow.on('will-move', () => {
+    userAdjustingOverlay = true
+  })
+  overlayWindow.on('will-resize', () => {
+    userAdjustingOverlay = true
+  })
+  overlayWindow.on('moved', onOverlayMovedOrResized)
+  overlayWindow.on('resized', onOverlayMovedOrResized)
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     overlayWindow.loadURL(process.env['ELECTRON_RENDERER_URL'] + '#overlay')
@@ -330,10 +409,16 @@ app.whenReady().then(async () => {
       })
     }
 
-    // Handle overlay position change — reposition if overlay is visible
+    // Handle overlay position change — grid of the display that holds the overlay
     if ('overlay_position' in updates && overlayWindow && !overlayWindow.isDestroyed()) {
-      const bounds = calculateOverlayBounds(updates.overlay_position as string)
-      overlayWindow.setBounds(bounds)
+      const bounds = gridBoundsForOverlay(
+        updates.overlay_position as string,
+        overlayWindow.getBounds(),
+        displayInfos(),
+        screen.getPrimaryDisplay().id
+      )
+      setOverlayBoundsFromCode(bounds)
+      savePlacementFromBounds(bounds)
     }
   })
 
@@ -374,6 +459,10 @@ app.whenReady().then(async () => {
 
   createMainWindow()
   createOverlayWindow()
+
+  screen.on('display-added', onDisplaysChanged)
+  screen.on('display-removed', onDisplaysChanged)
+  screen.on('display-metrics-changed', onDisplaysChanged)
 
   // ── Auto-start backend if setup is complete ──
 

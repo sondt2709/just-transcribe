@@ -100,6 +100,10 @@ export interface ElectronConfig {
   overlay_position: string
   overlay_enabled: boolean
   overlay_click_through: boolean
+  /** Display ID of the saved overlay placement ('' = none). */
+  overlay_display_id: string
+  /** Saved overlay placement "fx,fy,width,height" ('' = none). See overlayPlacement.ts. */
+  overlay_bounds: string
   launch_at_login: boolean
 }
 
@@ -107,6 +111,8 @@ const ELECTRON_CONFIG_DEFAULTS: ElectronConfig = {
   overlay_position: 'bottom-center',
   overlay_enabled: false,
   overlay_click_through: false,
+  overlay_display_id: '',
+  overlay_bounds: '',
   launch_at_login: false
 }
 
@@ -125,12 +131,16 @@ export function readElectronConfig(): ElectronConfig {
     const enabledMatch = content.match(/overlay_enabled\s*=\s*(true|false)/)
     const clickThroughMatch = content.match(/overlay_click_through\s*=\s*(true|false)/)
     const loginMatch = content.match(/launch_at_login\s*=\s*(true|false)/)
+    const displayIdMatch = content.match(/overlay_display_id\s*=\s*"([^"]*)"/)
+    const boundsMatch = content.match(/overlay_bounds\s*=\s*"([^"]*)"/)
 
     const position = posMatch?.[1] ?? ''
     return {
       overlay_position: VALID_POSITIONS.includes(position) ? position : ELECTRON_CONFIG_DEFAULTS.overlay_position,
       overlay_enabled: enabledMatch ? enabledMatch[1] === 'true' : ELECTRON_CONFIG_DEFAULTS.overlay_enabled,
       overlay_click_through: clickThroughMatch ? clickThroughMatch[1] === 'true' : ELECTRON_CONFIG_DEFAULTS.overlay_click_through,
+      overlay_display_id: displayIdMatch?.[1] ?? ELECTRON_CONFIG_DEFAULTS.overlay_display_id,
+      overlay_bounds: boundsMatch?.[1] ?? ELECTRON_CONFIG_DEFAULTS.overlay_bounds,
       launch_at_login: loginMatch ? loginMatch[1] === 'true' : ELECTRON_CONFIG_DEFAULTS.launch_at_login
     }
   } catch {
