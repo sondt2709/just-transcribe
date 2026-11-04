@@ -12,5 +12,5 @@
 
 ## 3. Real-device check
 
-- [ ] 3.1 On the base code: start, stop, reconnect the headset, start → expect `PaErrorCode -9986`
-- [ ] 3.2 On the fix: same steps → expect `recording`, `mic_active: true`, and `chunks_mic > 0` in `events.jsonl`
+- [x] 3.1 On the base code: start, stop, reconnect the headset, start → expect `PaErrorCode -9986`
+- [x] 3.2 On the fix: same steps → expect `recording`, `mic_active: true`, and `chunks_mic > 0` in `events.jsonl`
