@@ -4,6 +4,10 @@ import {
   calculateOverlayBounds,
   resolveOverlayBounds,
   gridBoundsForOverlay,
+  displayForBounds,
+  placementFromBounds,
+  parsePlacement,
+  serializePlacement,
   type DisplayInfo,
   type Rect
 } from './overlayPlacement.ts'
@@ -74,4 +78,28 @@ test('grid pick while the overlay is on the external display: grid of the extern
   const r = gridBoundsForOverlay('bottom-right', current, [LAPTOP, EXTERNAL], 1)
   assert.deepEqual(r, calculateOverlayBounds('bottom-right', EXTERNAL.workArea))
   assertInside(r, EXTERNAL.workArea)
+})
+
+test('drag to the external display, save, restore: same bounds', () => {
+  const dragged = { x: 1000, y: -700, width: 454, height: 433 }
+  const display = displayForBounds(dragged, [LAPTOP, EXTERNAL], 1)
+  assert.equal(display.id, 3)
+  const cfg = serializePlacement(placementFromBounds(dragged, display))
+  const saved = parsePlacement(cfg.overlay_display_id, cfg.overlay_bounds)
+  const r = resolveOverlayBounds({ saved, displays: [LAPTOP, EXTERNAL], primaryId: 1, position: 'bottom-center' })
+  assert.deepEqual(r, dragged)
+})
+
+test('bounds off every display: nearest display is used', () => {
+  const offscreen = { x: 1700, y: 500, width: 400, height: 300 }
+  assert.equal(displayForBounds(offscreen, [LAPTOP, EXTERNAL], 1).id, 1)
+})
+
+test('bad config strings: no placement', () => {
+  assert.equal(parsePlacement(undefined, '0.5,0.5,400,300'), null)
+  assert.equal(parsePlacement('3', undefined), null)
+  assert.equal(parsePlacement('abc', '0.5,0.5,400,300'), null)
+  assert.equal(parsePlacement('3', '0.5,0.5,400'), null)
+  assert.equal(parsePlacement('3', '0.5,x,400,300'), null)
+  assert.equal(parsePlacement('3', '0.5,0.5,0,300'), null)
 })

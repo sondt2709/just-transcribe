@@ -49,7 +49,7 @@ export function OverlayView(): JSX.Element {
 
   return (
     <div className="h-screen w-screen p-2">
-    <div className="h-full w-full flex flex-col rounded-xl overflow-hidden" style={{ background: 'rgba(0, 0, 0, 0.3)' }}>
+    <div className="h-full w-full flex flex-col rounded-xl overflow-hidden" style={{ background: 'rgba(0, 0, 0, 0.4)' }}>
       {/* Drag handle (hidden when click-through) */}
       {!clickThrough && (
         <div
@@ -116,25 +116,38 @@ export function OverlayView(): JSX.Element {
           </div>
         )}
 
-        {visibleSegments.map((seg) => (
-          <div key={seg.id} className="space-y-0.5">
-            {/* Original text */}
-            <div className="flex items-start gap-2">
-              <span className="text-white/40 text-[10px] font-medium mt-0.5 shrink-0 w-10 text-right">
-                {seg.speaker}
-              </span>
-              <span className="text-white/90 text-xs leading-relaxed">{seg.text}</span>
-            </div>
-
-            {/* Translations */}
-            {Object.entries(seg.translations).map(([lang, text]) => (
-              <div key={lang} className="flex items-start gap-2 ml-12">
-                <span className="text-white/25 text-[10px] shrink-0">{lang.toUpperCase()}</span>
-                <span className="text-white/50 text-xs leading-relaxed italic">{text}</span>
+        {visibleSegments.map((seg) => {
+          const translations = Object.entries(seg.translations)
+          const translated = translations.length > 0
+          return (
+            <div key={seg.id} className="space-y-1">
+              {/* Original text: primary until a translation arrives, then secondary.
+                  Only the color changes, so the layout does not jump. */}
+              <div className="flex items-start gap-2">
+                <span className="text-white/40 text-[10px] font-medium mt-0.5 shrink-0 w-10 text-right">
+                  {seg.speaker}
+                </span>
+                <span
+                  className={`text-xs leading-relaxed transition-colors duration-300 ${
+                    translated ? 'text-white/55' : 'text-white/90'
+                  }`}
+                >
+                  {seg.text}
+                </span>
               </div>
-            ))}
-          </div>
-        ))}
+
+              {/* Translations: the primary text */}
+              {translations.map(([lang, text]) => (
+                <div key={lang} className="flex items-start gap-2">
+                  <span className="text-white/40 text-[10px] font-medium mt-1 shrink-0 w-10 text-right">
+                    {lang.toUpperCase()}
+                  </span>
+                  <span className="text-white text-sm leading-relaxed">{text}</span>
+                </div>
+              ))}
+            </div>
+          )
+        })}
 
         {interim && (
           <div className="flex items-start gap-2">
