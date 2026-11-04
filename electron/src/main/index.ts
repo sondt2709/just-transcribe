@@ -16,6 +16,7 @@ import {
   writeBackendVersion
 } from './setup'
 import { createTray, updateTrayState, destroyTray } from './tray'
+import { resolveOverlayBounds, gridBoundsForOverlay, type DisplayInfo } from './overlayPlacement'
 
 let mainWindow: BrowserWindow | null = null
 let overlayWindow: BrowserWindow | null = null
@@ -28,25 +29,10 @@ function getElectronRoot(): string {
   return is.dev ? join(__dirname, '..', '..') : app.getAppPath()
 }
 
-// ── Position calculator for 9-grid overlay placement ──
+// ── Overlay placement ──
 
-const OVERLAY_WIDTH_RATIO = 0.3
-const OVERLAY_HEIGHT_RATIO = 0.5
-
-function calculateOverlayBounds(position: string): { x: number; y: number; width: number; height: number } {
-  const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize
-  const { x: ox, y: oy } = screen.getPrimaryDisplay().workArea
-  const w = Math.round(sw * OVERLAY_WIDTH_RATIO)
-  const h = Math.round(sh * OVERLAY_HEIGHT_RATIO)
-
-  const col = position.includes('left') ? 0 : position.includes('right') ? 2 : 1
-  const row = position.includes('top') ? 0 : position.includes('bottom') || position.startsWith('bot') ? 2 : 1
-
-  const margin = 20
-  const xPositions = [ox + margin, ox + Math.round((sw - w) / 2), ox + sw - w - margin]
-  const yPositions = [oy + margin, oy + Math.round((sh - h) / 2), oy + sh - h - margin]
-
-  return { x: xPositions[col], y: yPositions[row], width: w, height: h }
+function displayInfos(): DisplayInfo[] {
+  return screen.getAllDisplays().map((d) => ({ id: d.id, workArea: d.workArea }))
 }
 
 // ── Window creation ──
@@ -92,7 +78,12 @@ function createMainWindow(): void {
 
 function createOverlayWindow(): void {
   const config = readElectronConfig()
-  const bounds = calculateOverlayBounds(config.overlay_position)
+  const bounds = resolveOverlayBounds({
+    saved: null,
+    displays: displayInfos(),
+    primaryId: screen.getPrimaryDisplay().id,
+    position: config.overlay_position
+  })
 
   overlayWindow = new BrowserWindow({
     ...bounds,
@@ -332,7 +323,12 @@ app.whenReady().then(async () => {
 
     // Handle overlay position change — reposition if overlay is visible
     if ('overlay_position' in updates && overlayWindow && !overlayWindow.isDestroyed()) {
-      const bounds = calculateOverlayBounds(updates.overlay_position as string)
+      const bounds = gridBoundsForOverlay(
+        updates.overlay_position as string,
+        overlayWindow.getBounds(),
+        displayInfos(),
+        screen.getPrimaryDisplay().id
+      )
       overlayWindow.setBounds(bounds)
     }
   })
