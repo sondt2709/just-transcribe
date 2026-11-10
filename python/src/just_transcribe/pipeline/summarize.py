@@ -47,7 +47,9 @@ Return ONLY a JSON object, no Markdown and no other text, with this exact shape:
 }}
 "info" is a fact or decision, "action" is a task or commitment, "question" is a question that was asked.
 Suggested answers are replies the user ("You") can give to open questions or requests from "Others".
-When a previous summary is given, return an updated summary of the whole conversation, not only the new part."""
+When a "Summary so far" is given, return an updated summary of the WHOLE conversation, not only the new part:
+keep every item, next action and suggested answer from the summary so far that is still relevant,
+merge duplicates, update or drop the ones the new conversation resolves, and add the new ones."""
 
 TypedTranscript = list[dict]
 
@@ -83,13 +85,9 @@ def overlap_for(entries: TypedTranscript, covered_id: Optional[int], first_new: 
 
 
 def summary_to_text(summary: dict) -> str:
-    """Plain-text rendering of a summary (used as 'Summary so far' in rolling prompts)."""
-    lines = [summary.get("summary", "")]
-    for it in summary.get("items", []):
-        lines.append(f"- [{it['type']}] {it['speaker']}: {it['text']}")
-    for a in summary.get("next_actions", []):
-        lines.append(f"- next: {a}")
-    return "\n".join(line for line in lines if line)
+    """The previous summary in the same JSON shape the LLM must return, so it can carry
+    every block (items, next actions, suggested answers) forward in a rolling update."""
+    return json.dumps(summary, ensure_ascii=False, indent=1)
 
 
 def build_content(prev_summary: Optional[dict], overlap: TypedTranscript, new: TypedTranscript) -> str:

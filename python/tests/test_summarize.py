@@ -116,6 +116,12 @@ def test_rolling_content_has_three_parts():
     assert "Beta ships Friday." in content and "old" in content and "new" in content
 
 
+def test_rolling_content_carries_all_previous_blocks():
+    content = build_content(parse_summary(json.dumps(GOOD)), [], [seg(2, 10, "new")])
+    for text in ("QA needs two days", "Who owns release notes?", "Send bug list", "Not in the beta."):
+        assert text in content
+
+
 def test_render_prompt_placeholders():
     out = render_prompt("Lang {{language}}. Ctx {{context}}. Content: {{content}}", "C", "Sprint review", "Vietnamese")
     assert out == "Lang Vietnamese. Ctx Sprint review. Content: C"
