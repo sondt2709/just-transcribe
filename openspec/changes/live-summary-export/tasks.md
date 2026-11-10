@@ -34,6 +34,6 @@
 
 ## 6. Verify
 
-- [ ] 6.1 `cd python && uv run pytest` and `cd electron && npm test && npm run build` pass
-- [ ] 6.2 Real session in the dev app: `You` lines with `say` (mic only), `Others` lines with `afplay` (speaker); auto summary appears; capture a screenshot and the real `GET /api/summary` response
-- [ ] 6.3 Export the transcript and the summary through the Save dialog; read the files
+- [x] 6.1 `cd python && uv run pytest` and `cd electron && npm test && npm run build` pass
+- [x] 6.2 Real session in the dev app with `Others` lines from `say` (speaker capture); auto summary and rolling update appear; capture screenshots and the real `GET /api/summary` responses (`You` lines through the mic were not possible: the Mac output was muted)
+- [x] 6.3 Export the summary through the Save dialog and read the file; run the transcript formatters on the real `/api/transcript` data

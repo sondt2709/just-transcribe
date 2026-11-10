@@ -8,8 +8,12 @@ The user SHALL be able to export the full transcript history to a file from the 
 - **THEN** `call.md` contains the transcript in the Markdown export format
 
 #### Scenario: Export as text
-- **WHEN** the user clicks Export and saves as `call.txt`
+- **WHEN** the user clicks Export, selects the Text format, and saves as `call.txt`
 - **THEN** `call.txt` contains the same text that Copy writes to the clipboard
+
+#### Scenario: Text extension typed with the Markdown format
+- **WHEN** the user types `call.txt` but keeps the Markdown format
+- **THEN** macOS saves `call.txt.md`, and the file contains the Markdown format
 
 #### Scenario: Cancel the dialog
 - **WHEN** the user cancels the Save dialog

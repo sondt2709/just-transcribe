@@ -32,7 +32,7 @@ Each line is `[HH:MM:SS] You: <text>` or `[HH:MM:SS] Others: <text>`. The time c
 
 - **Full mode:** when no previous summary exists and the transcript spans `summary_window_s` (default 600 s) or less, `{{content}}` is the full transcript.
 - **Rolling mode:** when a previous summary exists, `{{content}}` has three parts:
-  1. `Summary so far:` with the previous summary as plain text.
+  1. `Summary so far:` with the previous summary as JSON in the output shape. The system message tells the model to carry forward every earlier item, next action and suggested answer that is still relevant. (A real run showed that a plain-text summary made the model list only the new items.)
   2. `Earlier conversation (already summarized):` with the overlap, which is the summarized segments in the last `summary_overlap_s` seconds (default 60) before the first new segment.
   3. `New conversation:` with the new segments.
 - **Backlog:** if the new segments span more than `summary_window_s` (for example, the first manual run after 30 minutes), the service summarizes them in sequential windows. Each window uses the rolling result of the window before it. Each window is one LLM call.
@@ -57,7 +57,7 @@ The parser removes code fences and reads the text from the first `{` to the last
 `window.api.saveTextFile({ defaultName, markdown, text })` opens `dialog.showSaveDialog` with the filters Markdown (`.md`) and Text (`.txt`). The main process writes `text` when the selected path ends with `.txt`. In all other cases it writes `markdown`. The renderer never sends a file path. As a result, the renderer cannot write to an arbitrary path. Formatters in `lib/exportFormat.ts` are pure functions with `node --test` tests. The transcript `.txt` format reuses `formatTranscriptText`.
 
 ### 7. UI placement
-A `SummaryPanel` column (w-96) sits between the transcript and the controls sidebar. A "Summary" toggle in `Controls` shows or hides it, and `localStorage` remembers the choice (default: shown). Settings gets an "AI Summary" section with the mode, the debounce, the minimum segments, the window, the overlap, and the prompt textarea with "Reset to default".
+A `SummaryPanel` column (22rem) sits between the transcript and the controls sidebar. A "Summary" toggle in `Controls` shows or hides it, and `localStorage` remembers the choice (default: shown). Settings gets an "AI Summary" section with the mode, the debounce, the minimum segments, the window, the overlap, and the prompt textarea with "Reset to default".
 
 ## Risks / Trade-offs
 
