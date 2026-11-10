@@ -5,11 +5,24 @@ import { Transcript } from './components/Transcript'
 import { Controls } from './components/Controls'
 import { Settings } from './components/Settings'
 import { Setup } from './components/Setup'
+import { SummaryPanel } from './components/SummaryPanel'
+
+const SUMMARY_OPEN_KEY = 'summaryPanelOpen'
+
+function readSummaryOpen(): boolean {
+  try {
+    return localStorage.getItem(SUMMARY_OPEN_KEY) !== 'false'
+  } catch {
+    return true
+  }
+}
 
 export default function App(): JSX.Element {
   const [setupComplete, setSetupComplete] = useState<boolean | null>(null)
   const [showSettings, setShowSettings] = useState(false)
   const [asrLanguage, setAsrLanguage] = useState('')
+  const [summaryOpen, setSummaryOpen] = useState(readSummaryOpen)
+  const [configVersion, setConfigVersion] = useState(0)
   const backend = useBackend()
 
   const handleAsrLanguageChange = useCallback(
@@ -32,7 +45,26 @@ export default function App(): JSX.Element {
     },
     [backend.port]
   )
-  const { segments, interim, connected: wsConnected, alert, dismissAlert } = useTranscript(backend.port)
+  const {
+    segments,
+    interim,
+    connected: wsConnected,
+    alert,
+    dismissAlert,
+    summary,
+    summaryContext
+  } = useTranscript(backend.port)
+
+  const toggleSummary = useCallback(() => {
+    setSummaryOpen((open) => {
+      try {
+        localStorage.setItem(SUMMARY_OPEN_KEY, String(!open))
+      } catch {
+        // per-viewer convenience only
+      }
+      return !open
+    })
+  }, [])
 
   useEffect(() => {
     window.api.getSetupStatus().then((status) => {
@@ -95,6 +127,18 @@ export default function App(): JSX.Element {
           <Transcript segments={segments} interim={interim} />
         </div>
 
+        {/* AI summary panel */}
+        {summaryOpen && (
+          <div className="w-[22rem] border-l border-neutral-800 flex flex-col shrink-0 min-h-0 no-drag">
+            <SummaryPanel
+              port={backend.port}
+              summary={summary}
+              context={summaryContext}
+              configVersion={configVersion}
+            />
+          </div>
+        )}
+
         {/* Sidebar */}
         <div className="w-72 border-l border-neutral-800 flex flex-col shrink-0 no-drag">
           <Controls
@@ -102,6 +146,9 @@ export default function App(): JSX.Element {
             connected={backend.connected && wsConnected}
             modelLoaded={backend.status?.model_loaded ?? false}
             port={backend.port}
+            hasSegments={segments.length > 0}
+            summaryOpen={summaryOpen}
+            onSummaryToggle={toggleSummary}
             asrLanguage={asrLanguage}
             onAsrLanguageChange={handleAsrLanguageChange}
             onStart={() => backend.startRecording()}
@@ -116,7 +163,10 @@ export default function App(): JSX.Element {
         <Settings
           port={backend.port}
           recording={backend.recording}
-          onClose={() => setShowSettings(false)}
+          onClose={() => {
+            setShowSettings(false)
+            setConfigVersion((v) => v + 1)
+          }}
         />
       )}
     </div>

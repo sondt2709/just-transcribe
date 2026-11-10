@@ -22,6 +22,11 @@ const api = {
   startBackend: (): Promise<{ success: boolean; port?: number; error?: string }> =>
     ipcRenderer.invoke('start-backend'),
   getBackendPort: (): Promise<number> => ipcRenderer.invoke('get-backend-port'),
+  saveTextFile: (args: {
+    defaultName: string
+    markdown: string
+    text: string
+  }): Promise<{ saved: boolean; path?: string }> => ipcRenderer.invoke('save-text-file', args),
 
   // Electron-only config
   getElectronConfig: (): Promise<{ overlay_position: string; overlay_enabled: boolean; overlay_click_through: boolean; launch_at_login: boolean }> =>

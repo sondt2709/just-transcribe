@@ -46,6 +46,12 @@ class AppConfig:
     asr_api_key: str = ""  # remote ASR API key
     asr_timeout_s: float = 10.0  # per-request timeout for remote ASR
     debug_audio: bool = False  # save ASR input WAVs + stall ring dumps
+    summary_mode: str = "auto"  # "auto" (debounced on final segments) or "manual"
+    summary_debounce_s: float = 10.0  # silence after the last final segment before an auto run
+    summary_min_segments: int = 2  # new final segments needed for an auto run
+    summary_window_s: float = 600.0  # max span of new transcript per LLM call
+    summary_overlap_s: float = 60.0  # already-summarized transcript repeated for context
+    summary_prompt: str = ""  # user template; empty = built-in default
 
     def to_dict(self) -> dict:
         return {
@@ -63,6 +69,12 @@ class AppConfig:
             "asr_api_key": self.asr_api_key,
             "asr_timeout_s": self.asr_timeout_s,
             "debug_audio": self.debug_audio,
+            "summary_mode": self.summary_mode,
+            "summary_debounce_s": self.summary_debounce_s,
+            "summary_min_segments": self.summary_min_segments,
+            "summary_window_s": self.summary_window_s,
+            "summary_overlap_s": self.summary_overlap_s,
+            "summary_prompt": self.summary_prompt,
         }
 
     @classmethod
@@ -82,6 +94,12 @@ class AppConfig:
             asr_api_key=data.get("asr_api_key", ""),
             asr_timeout_s=float(data.get("asr_timeout_s", 10.0)),
             debug_audio=bool(data.get("debug_audio", False)),
+            summary_mode=data.get("summary_mode", "auto") if data.get("summary_mode") in ("auto", "manual") else "auto",
+            summary_debounce_s=float(data.get("summary_debounce_s", 10.0)),
+            summary_min_segments=int(data.get("summary_min_segments", 2)),
+            summary_window_s=float(data.get("summary_window_s", 600.0)),
+            summary_overlap_s=float(data.get("summary_overlap_s", 60.0)),
+            summary_prompt=str(data.get("summary_prompt", "")),
         )
 
 

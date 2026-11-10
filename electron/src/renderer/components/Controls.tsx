@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { copyTranscript, clearTranscript } from '../lib/transcriptActions'
+import { copyTranscript, clearTranscript, exportTranscript } from '../lib/transcriptActions'
 
 const ASR_LANGUAGES = [
   { code: '', label: 'Auto' },
@@ -16,6 +16,9 @@ interface ControlsProps {
   connected: boolean
   modelLoaded: boolean
   port: number | null
+  hasSegments: boolean
+  summaryOpen: boolean
+  onSummaryToggle: () => void
   asrLanguage: string
   onAsrLanguageChange: (lang: string) => void
   onStart: () => void
@@ -28,6 +31,9 @@ export function Controls({
   connected,
   modelLoaded,
   port,
+  hasSegments,
+  summaryOpen,
+  onSummaryToggle,
   asrLanguage,
   onAsrLanguageChange,
   onStart,
@@ -46,6 +52,15 @@ export function Controls({
       }
     } catch (err) {
       console.error('Copy transcript failed:', err)
+    }
+  }
+
+  const handleExport = async (): Promise<void> => {
+    if (!port) return
+    try {
+      await exportTranscript(port)
+    } catch (err) {
+      console.error('Export transcript failed:', err)
     }
   }
 
@@ -124,6 +139,13 @@ export function Controls({
             {copied ? 'Copied ✓' : 'Copy'}
           </button>
           <button
+            onClick={handleExport}
+            disabled={!port || !hasSegments}
+            className="flex-1 px-2 py-1.5 text-xs rounded bg-neutral-800 text-neutral-400 hover:text-neutral-200 border border-neutral-700 disabled:opacity-40 transition-colors"
+          >
+            Export
+          </button>
+          <button
             onClick={handleClear}
             disabled={!port}
             className="flex-1 px-2 py-1.5 text-xs rounded bg-neutral-800 text-neutral-400 hover:text-red-400 border border-neutral-700 transition-colors"
@@ -131,6 +153,21 @@ export function Controls({
             Clear
           </button>
         </div>
+      </div>
+
+      {/* AI summary panel toggle */}
+      <div className="mt-4">
+        <label className="block text-xs text-neutral-500 mb-1.5">AI</label>
+        <button
+          onClick={onSummaryToggle}
+          className={`w-full px-2 py-1.5 text-xs rounded border transition-colors ${
+            summaryOpen
+              ? 'bg-teal-500/20 text-teal-400 border-teal-500/30'
+              : 'bg-neutral-800 text-neutral-400 hover:text-neutral-200 border-neutral-700'
+          }`}
+        >
+          {summaryOpen ? 'Hide Summary' : 'Show Summary'}
+        </button>
       </div>
 
       {/* Spacer */}

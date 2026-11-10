@@ -20,6 +20,7 @@ from just_transcribe.config import SESSIONS_DIR, AppConfig, load_config, save_co
 from just_transcribe.pipeline.asr import ASREngine, ASRProvider, TranscriptSegment
 from just_transcribe.pipeline.asr_remote import RemoteASREngine, test_connection
 from just_transcribe.pipeline.orchestrator import PipelineOrchestrator
+from just_transcribe.pipeline.summarize import SummaryService
 from just_transcribe.pipeline.translate import TranslationResult, TranslationService
 from just_transcribe.pipeline.vad import VoiceActivityDetector
 from just_transcribe.tracing import NullTracer, SessionTracer
@@ -40,6 +41,7 @@ class AppState:
         self.vad: Optional[VoiceActivityDetector] = None
         self.asr: Optional[ASRProvider] = None
         self.translator: Optional[TranslationService] = None
+        self.summarizer: Optional[SummaryService] = None
         self.stream_manager: Optional[AudioStreamManager] = None
         self.orchestrator: Optional[PipelineOrchestrator] = None
         self.tracer = NullTracer()
@@ -110,6 +112,12 @@ def create_app(
             preferred_language_2=config.preferred_language_2,
         )
 
+        state.summarizer = SummaryService(
+            config,
+            get_transcript=lambda: state.transcript,
+            on_update=lambda snap: state.broadcast({"type": "summary", **snap}),
+        )
+
         logger.info("Models loaded, server ready")
         print("READY", flush=True)  # Signal to Electron
 
@@ -120,8 +128,11 @@ def create_app(
             await state.orchestrator.stop()
         if state.translator:
             await state.translator.close()
+        if state.summarizer:
+            await state.summarizer.close()
 
     app = FastAPI(title="just-transcribe", lifespan=lifespan)
+    app.state.app_state = state  # exposed for tests
 
     app.add_middleware(
         CORSMiddleware,
@@ -142,6 +153,7 @@ def create_app(
 
         state.tracer = SessionTracer(debug_audio=state.config.debug_audio)
         state.translator.set_tracer(state.tracer)
+        state.summarizer.set_tracer(state.tracer)
 
         state.stream_manager = AudioStreamManager(audiotee_path=state.audiotee_path)
         state.orchestrator = PipelineOrchestrator(
@@ -168,6 +180,7 @@ def create_app(
         except Exception as e:
             logger.error("Failed to start recording: %s", e)
             state.translator.set_tracer(None)
+            state.summarizer.set_tracer(None)
             state.tracer.close()
             state.tracer = NullTracer()
             return {"status": "error", "message": str(e)}
@@ -181,6 +194,7 @@ def create_app(
         state.recording = False
         state.broadcast({"type": "status", "state": "stopped"})
         state.translator.set_tracer(None)
+        state.summarizer.set_tracer(None)
         state.tracer.close()
         state.tracer = NullTracer()
         return {"status": "stopped"}
@@ -269,6 +283,8 @@ def create_app(
                 preferred_language=state.config.preferred_language,
                 preferred_language_2=state.config.preferred_language_2,
             )
+        if state.summarizer:
+            state.summarizer.configure(state.config)
 
         return {"status": "ok"}
 
@@ -310,7 +326,24 @@ def create_app(
     async def clear_transcript():
         state.transcript.clear()
         state.broadcast({"type": "clear"})
+        if state.summarizer:
+            state.summarizer.reset()
         return {"status": "cleared"}
+
+    # --- Live summary ---
+
+    @app.get("/api/summary")
+    async def get_summary():
+        return {**state.summarizer.snapshot(), "context": state.summarizer.context}
+
+    @app.post("/api/summary/run")
+    async def run_summary():
+        return await state.summarizer.run_now()
+
+    @app.put("/api/summary/context")
+    async def set_summary_context(body: dict):
+        text = state.summarizer.set_context(str(body.get("text", "")))
+        return {"status": "ok", "length": len(text)}
 
     # --- Trace sessions (read-only) ---
 
@@ -461,6 +494,8 @@ def _on_segment(state: AppState, segment: TranscriptSegment) -> None:
     }
     state.transcript.append({**entry, "translations": {}})
     state.broadcast({"type": "segment", **entry})
+    if state.summarizer:
+        state.summarizer.notify_segment()
 
 
 def _on_translation(state: AppState, result: TranslationResult) -> None:
