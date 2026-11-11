@@ -98,12 +98,12 @@ class SystemEngine:
     def voices(self) -> list[dict]:
         if self._voices is None:
             try:
-                out = self._run(["say", "-v", "?"], capture_output=True, text=True, timeout=10).stdout
-                self._voices = parse_say_voices(out)
+                out = self._run(["say", "-v", "?"], capture_output=True, text=True, timeout=30).stdout
             except Exception as e:  # pragma: no cover - only without `say`
                 logger.warning("Cannot list macOS voices: %s", e)
-                self._voices = []
-        return self._voices
+                return []  # not cached: try again next time
+            self._voices = parse_say_voices(out) or None
+        return self._voices or []
 
     def voice_for(self, lang: str) -> Optional[str]:
         return self.voice or pick_voice(self.voices(), lang)

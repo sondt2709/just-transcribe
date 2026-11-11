@@ -26,12 +26,15 @@
 
 - [x] 3.9 Gate mic segments by their time span against recorded playback intervals (a real run leaked one echo line with the "now" check); regression test
 
+- [x] 3.10 Do not cache a failed macOS voice list; test
+
 ## 4. UI (Electron)
 
 - [x] 4.1 Handle `speak` events in `useTranscript.ts` (utterance list by id)
 - [x] 4.2 Create `AiPanel.tsx` with tabs Summary | Speak; create `SpeakPanel.tsx` (target, engine line, text box with ⌘↩, Translate first, Speak my speech, Now playing + Stop, history with Replay/Copy)
 - [x] 4.3 Add speak buttons to `You` lines in `Transcript.tsx` and to suggested answers in `SummaryPanel.tsx`
 - [x] 4.4 Add the "Voice (TTS)" section in `Settings.tsx` (engine, voice, target, device, fallback, download with progress, remote URL/key/model with Test); add the Uninstall line for the TTS model
+- [x] 4.6 Speak tab refreshes engine/voice when shown and after each finished line; shows "…" while the status loads
 - [x] 4.5 Add the optional Qwen3-TTS step to `Setup.tsx` and `ttsModelDownloaded` to `main/setup.ts` (does not change `ready`)
 
 ## 5. Verify

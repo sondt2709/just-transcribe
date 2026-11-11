@@ -66,6 +66,7 @@ export function AiPanel(props: AiPanelProps): JSX.Element {
       <div className={`flex-1 min-h-0 ${tab === 'speak' ? '' : 'hidden'}`}>
         <SpeakPanel
           port={props.port}
+          active={tab === 'speak'}
           utterances={props.utterances}
           configVersion={props.configVersion}
           onOpenSettings={props.onOpenSettings}

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import subprocess
 import threading
 import time
 from types import SimpleNamespace
@@ -359,3 +360,17 @@ def test_playback_overlaps_uses_the_span():
     assert svc.playback_overlaps(now - 3.2, now - 1.0)  # a segment that spanned the playback
     assert svc.playback_overlaps(now - 2.0, now - 1.9)  # inside the 0.8 s release
     assert not svc.playback_overlaps(now - 1.5, now)  # after the release
+
+
+def test_failed_voice_list_is_not_cached():
+    calls = {"n": 0}
+
+    def runner(args, **kw):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise subprocess.TimeoutExpired(args, 30)
+        return SimpleNamespace(stdout=SAY_OUTPUT)
+
+    eng = SystemEngine("", runner=runner)
+    assert eng.voice_for("vi") is None
+    assert eng.voice_for("vi") == "Linh"
