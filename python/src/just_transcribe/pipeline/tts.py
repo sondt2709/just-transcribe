@@ -224,11 +224,34 @@ class QwenRemoteEngine:
 
 
 class SoundDevicePlayer:
-    """Blocking playback on a named output device; stoppable from another thread."""
+    """Blocking playback on a named output device; stoppable from another thread.
+
+    `can_reload()` says whether PortAudio may be reloaded (no mic stream is open:
+    Pa_Terminate closes every open stream).
+    """
+
+    def __init__(self, can_reload: Callable[[], bool] = lambda: True):
+        self.can_reload = can_reload
 
     def play(self, audio: np.ndarray, sr: int, device_name: str, stop: threading.Event) -> None:
         import sounddevice as sd
 
+        try:
+            self._play(sd, audio, sr, device_name, stop)
+        except sd.PortAudioError as e:
+            # Same failure as the mic fix (#9): PortAudio keeps the device list from
+            # its initialization; after a device change, opening a stream fails.
+            if not self.can_reload():
+                raise RuntimeError(
+                    f"{e}. The audio devices changed: stop and start recording, then try again."
+                ) from e
+            logger.warning("Output stream failed (%s); reloading PortAudio and retrying", e)
+            sd._terminate()
+            sd._initialize()
+            self._play(sd, audio, sr, device_name, stop)
+
+    @staticmethod
+    def _play(sd, audio: np.ndarray, sr: int, device_name: str, stop: threading.Event) -> None:
         device = resolve_output_device(device_name, sd.query_devices())
         channels = 1
         try:
