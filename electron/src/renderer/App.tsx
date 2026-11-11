@@ -5,7 +5,8 @@ import { Transcript } from './components/Transcript'
 import { Controls } from './components/Controls'
 import { Settings } from './components/Settings'
 import { Setup } from './components/Setup'
-import { AiPanel } from './components/AiPanel'
+import { SummaryPanel } from './components/SummaryPanel'
+import { SpeakPanel } from './components/SpeakPanel'
 import { speakText } from './lib/speak'
 
 const SUMMARY_OPEN_KEY = 'summaryPanelOpen'
@@ -138,19 +139,12 @@ export default function App(): JSX.Element {
         {/* AI summary panel */}
         {summaryOpen && (
           <div className="w-[22rem] border-l border-neutral-800 flex flex-col shrink-0 min-h-0 no-drag">
-            <AiPanel
-              port={backend.port}
-              summary={summary}
-              summaryContext={summaryContext}
-              utterances={utterances}
-              configVersion={configVersion}
-              onOpenSettings={() => setShowSettings(true)}
-            />
+            <SummaryPanel port={backend.port} summary={summary} context={summaryContext} configVersion={configVersion} />
           </div>
         )}
 
-        {/* Sidebar */}
-        <div className="w-72 border-l border-neutral-800 flex flex-col shrink-0 no-drag">
+        {/* Sidebar: scrolls when the Speak section does not fit */}
+        <div className="w-72 border-l border-neutral-800 flex flex-col shrink-0 min-h-0 overflow-y-auto no-drag">
           <Controls
             recording={backend.recording}
             connected={backend.connected && wsConnected}
@@ -164,7 +158,14 @@ export default function App(): JSX.Element {
             onStart={() => backend.startRecording()}
             onStop={() => backend.stopRecording()}
             onSettingsClick={() => setShowSettings(true)}
-          />
+          >
+            <SpeakPanel
+              port={backend.port}
+              utterances={utterances}
+              configVersion={configVersion}
+              onOpenSettings={() => setShowSettings(true)}
+            />
+          </Controls>
         </div>
       </div>
 

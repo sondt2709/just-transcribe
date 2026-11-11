@@ -4,7 +4,7 @@
 TBD - created by archiving change speak-translation. Update Purpose after archive.
 ## Requirements
 ### Requirement: Translate and speak typed text
-The Speak tab SHALL let the user type text, select a target language (`tts_target_lang`), and click "Translate & Speak" (or press ⌘↩). With "Translate first" on (default), the system SHALL translate the text to the target language with the translation LLM, then say the translation. With "Translate first" off, the system SHALL say the text as typed. The translation SHALL use the original text only and SHALL NOT use the transcript context.
+The Speak section SHALL be in the right sidebar, below the recording controls and the Summary toggle. The user SHALL be able to collapse and expand it (remembered per window), and the sidebar SHALL scroll when the section does not fit. While an utterance is queued or playing, a "Now playing" line with Stop SHALL stay visible even when the section is collapsed. The history SHALL show the newest utterance first. The Speak section SHALL let the user type text, select a target language (`tts_target_lang`), and click "Translate & Speak" (or press ⌘↩). With "Translate first" on (default), the system SHALL translate the text to the target language with the translation LLM, then say the translation. With "Translate first" off, the system SHALL say the text as typed. The translation SHALL use the original text only and SHALL NOT use the transcript context.
 
 #### Scenario: Typed Vietnamese said in English
 - **WHEN** the target language is `en` and the user types "Chúng tôi sẽ gửi bản beta vào thứ Sáu" and clicks "Translate & Speak"
@@ -30,7 +30,7 @@ Each transcript line with the speaker `You` and each suggested answer in the sum
 - **THEN** the line has no speak button
 
 ### Requirement: Speak my speech
-When `tts_speak_mic` is on, the system SHALL translate each final `You` segment to the target language and say it, in segment order. Segments that are already in the target language SHALL be said without translation. The setting SHALL be toggled from the Speak tab and saved in `config.toml`.
+When `tts_speak_mic` is on, the system SHALL translate each final `You` segment to the target language and say it, in segment order. Segments that are already in the target language SHALL be said without translation. The setting SHALL be toggled from the Speak section and saved in `config.toml`.
 
 #### Scenario: Own speech is translated and said
 - **WHEN** `tts_speak_mic` is on, the target is `en`, and the user says a Vietnamese sentence into the mic
@@ -61,7 +61,7 @@ The system SHALL support the TTS engines `system` (macOS `say` voices, default),
 
 #### Scenario: Qwen model not downloaded
 - **WHEN** `tts_engine = "qwen_local"` and the model is not in the HuggingFace cache
-- **THEN** the utterance fails with the error `Qwen3-TTS model not downloaded` and the Speak tab links to the download in Settings
+- **THEN** the utterance fails with the error `Qwen3-TTS model not downloaded` and the Speak section links to the download in Settings
 
 ### Requirement: Playback queue
 The system SHALL play one utterance at a time, in request order. "Stop" SHALL stop the current sound at once and drop the queued utterances. The system SHALL keep the audio of the last 20 utterances in memory, and "Replay" SHALL play one again without a new translation or synthesis.

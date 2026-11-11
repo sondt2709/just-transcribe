@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { copyTranscript, clearTranscript, exportTranscript } from '../lib/transcriptActions'
 
 const ASR_LANGUAGES = [
@@ -24,6 +24,8 @@ interface ControlsProps {
   onStart: () => void
   onStop: () => void
   onSettingsClick: () => void
+  /** Extra sections below the summary toggle (the Speak section). */
+  children?: ReactNode
 }
 
 export function Controls({
@@ -38,7 +40,8 @@ export function Controls({
   onAsrLanguageChange,
   onStart,
   onStop,
-  onSettingsClick
+  onSettingsClick,
+  children
 }: ControlsProps): JSX.Element {
   const [copied, setCopied] = useState(false)
 
@@ -74,9 +77,9 @@ export function Controls({
   }
 
   return (
-    <div className="flex flex-col h-full p-4">
-      {/* Status indicators */}
-      <div className="space-y-2 mb-6">
+    <div className="flex flex-col flex-1 p-4">
+      {/* Status indicators, one line */}
+      <div className="flex items-center gap-3 mb-3">
         <StatusDot label="Backend" active={connected} />
         <StatusDot label="Model" active={modelLoaded} />
         <StatusDot label="Recording" active={recording} pulse />
@@ -166,9 +169,11 @@ export function Controls({
               : 'bg-neutral-800 text-neutral-400 hover:text-neutral-200 border-neutral-700'
           }`}
         >
-          {summaryOpen ? 'Hide AI Panel' : 'Show AI Panel'}
+          {summaryOpen ? 'Hide Summary' : 'Show Summary'}
         </button>
       </div>
+
+      {children}
 
       {/* Spacer */}
       <div className="flex-1" />
@@ -194,15 +199,15 @@ function StatusDot({
   pulse?: boolean
 }): JSX.Element {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-1.5">
       <div
-        className={`w-2 h-2 rounded-full ${
+        className={`w-1.5 h-1.5 rounded-full ${
           active
             ? `bg-green-400 ${pulse ? 'animate-pulse' : ''}`
             : 'bg-neutral-700'
         }`}
       />
-      <span className="text-xs text-neutral-400">{label}</span>
+      <span className="text-[11px] text-neutral-500">{label}</span>
     </div>
   )
 }
