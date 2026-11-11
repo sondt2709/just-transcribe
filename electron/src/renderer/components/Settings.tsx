@@ -35,6 +35,7 @@ interface Config {
   debug_audio: boolean
   summary_mode: string
   summary_debounce_s: number
+  summary_max_wait_s: number
   summary_min_segments: number
   summary_window_s: number
   summary_overlap_s: number
@@ -73,6 +74,7 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
     debug_audio: false,
     summary_mode: 'auto',
     summary_debounce_s: 10,
+    summary_max_wait_s: 60,
     summary_min_segments: 2,
     summary_window_s: 600,
     summary_overlap_s: 60,
@@ -621,6 +623,16 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
                       max={300}
                       value={config.summary_debounce_s}
                       onChange={(e) => setConfig({ ...config, summary_debounce_s: Number(e.target.value) || 10 })}
+                      className={inputClass}
+                    />
+                  </Field>
+                  <Field label="Max wait (seconds)" hint="While people keep talking; 0 = off">
+                    <input
+                      type="number"
+                      min={0}
+                      max={3600}
+                      value={config.summary_max_wait_s}
+                      onChange={(e) => setConfig({ ...config, summary_max_wait_s: Math.max(0, Number(e.target.value) || 0) })}
                       className={inputClass}
                     />
                   </Field>

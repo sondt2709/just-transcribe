@@ -13,6 +13,7 @@ from just_transcribe.pipeline.summarize import (
     DEFAULT_TEMPLATE,
     SummaryService,
     build_content,
+    merge_summary,
     overlap_for,
     parse_summary,
     render_prompt,
@@ -116,10 +117,52 @@ def test_rolling_content_has_three_parts():
     assert "Beta ships Friday." in content and "old" in content and "new" in content
 
 
-def test_rolling_content_carries_all_previous_blocks():
-    content = build_content(parse_summary(json.dumps(GOOD)), [], [seg(2, 10, "new")])
-    for text in ("QA needs two days", "Who owns release notes?", "Send bug list", "Not in the beta."):
+def test_rolling_content_sends_summary_and_recent_items_only():
+    content = build_content(merge_summary(None, parse_summary(json.dumps(GOOD))), [], [seg(2, 10, "new")])
+    for text in ("Beta ships Friday.", "QA needs two days", "Who owns release notes?", "Write release notes"):
         assert text in content
+    # next actions and suggested answers are made new on each run, so they are not sent
+    assert "Send bug list" not in content and "Not in the beta." not in content
+
+
+def _item(text, t="info", who="Others"):
+    return {"type": t, "speaker": who, "text": text}
+
+
+def test_merge_keeps_earlier_items_and_appends_new():
+    prev = {"summary": "s1", "items": [_item("a"), _item("b")], "next_actions": ["old"], "suggested_answers": []}
+    out = merge_summary(prev, {"summary": "s2", "items": [_item("c")], "next_actions": [], "suggested_answers": []})
+    assert [i["text"] for i in out["items"]] == ["a", "b", "c"]
+    assert out["summary"] == "s2"
+
+
+def test_merge_update_last_item_replaces_only_the_last():
+    prev = {"summary": "s", "items": [_item("a"), _item("b")], "next_actions": [], "suggested_answers": []}
+    out = merge_summary(prev, {"summary": "s", "items": [], "update_last_item": _item("b, plus detail"),
+                               "next_actions": [], "suggested_answers": []})
+    assert [i["text"] for i in out["items"]] == ["a", "b, plus detail"]
+
+
+def test_merge_drops_repeated_items():
+    prev = {"summary": "s", "items": [_item("Ship Friday")], "next_actions": [], "suggested_answers": []}
+    out = merge_summary(prev, {"summary": "s", "items": [_item("ship friday"), _item("new")],
+                               "next_actions": [], "suggested_answers": []})
+    assert [i["text"] for i in out["items"]] == ["Ship Friday", "new"]
+
+
+def test_merge_replaces_next_actions_and_answers_with_latest():
+    prev = {"summary": "s", "items": [], "next_actions": ["old action"],
+            "suggested_answers": [{"for": "q1", "answer": "old answer"}]}
+    out = merge_summary(prev, {"summary": "s", "items": [], "next_actions": ["new action"],
+                               "suggested_answers": [{"for": "q2", "answer": "new answer"}]})
+    assert out["next_actions"] == ["new action"]
+    assert out["suggested_answers"] == [{"for": "q2", "answer": "new answer"}]
+
+
+def test_merge_latest_empty_actions_clear_old_ones():
+    prev = {"summary": "s", "items": [], "next_actions": ["old"], "suggested_answers": [{"for": "", "answer": "x"}]}
+    out = merge_summary(prev, {"summary": "s", "items": [], "next_actions": [], "suggested_answers": []})
+    assert out["next_actions"] == [] and out["suggested_answers"] == []
 
 
 def test_render_prompt_placeholders():
@@ -152,6 +195,7 @@ def test_parse_invalid_reply():
 def test_config_defaults_for_old_file():
     c = AppConfig.from_dict({"preferred_language": "vi"})
     assert (c.summary_mode, c.summary_debounce_s, c.summary_min_segments) == ("auto", 10.0, 2)
+    assert c.summary_max_wait_s == 60.0
     assert (c.summary_window_s, c.summary_overlap_s, c.summary_prompt) == (600.0, 60.0, "")
     c2 = AppConfig.from_dict(cfg(summary_mode="manual", summary_prompt="X").to_dict())
     assert (c2.summary_mode, c2.summary_prompt) == ("manual", "X")
@@ -190,6 +234,23 @@ def test_invalid_reply_keeps_previous_summary():
     assert snap["status"] == "error"
     assert snap["summary"]["summary"] == "Beta ships Friday."
     assert snap["covered_segment_id"] == 1
+
+
+def test_rolling_run_keeps_items_the_llm_did_not_repeat():
+    transcript = [seg(1, 0)]
+    second = {"summary": "Beta ships Friday; SSO later.", "update_last_item": None,
+              "items": [{"type": "info", "speaker": "Others", "text": "SSO comes in v2"}],
+              "next_actions": ["Tell the client about v2"], "suggested_answers": []}
+    llm = FakeLLM([json.dumps(GOOD), json.dumps(second)])
+    svc, _ = make_service(transcript, llm)
+    asyncio.run(svc.run_now())
+    transcript.append(seg(2, 10))
+    snap = asyncio.run(svc.run_now())
+    texts = [i["text"] for i in snap["summary"]["items"]]
+    assert texts == ["QA needs two days", "Who owns release notes?", "Write release notes", "SSO comes in v2"]
+    assert snap["summary"]["next_actions"] == ["Tell the client about v2"]
+    assert snap["summary"]["suggested_answers"] == []
+    assert "update_last_item" not in snap["summary"]
 
 
 def test_short_transcript_sent_in_full():
@@ -275,6 +336,20 @@ def test_auto_runs_after_debounce():
 def test_debounce_restarts_on_new_segment():
     # segment every 0.6 s with a 1 s debounce: no run while speech continues
     llm = asyncio.run(_auto_scenario([0, 0.6, 1.2, 1.8], wait=0.5, summary_debounce_s=1.0, summary_min_segments=1))
+    assert llm.requests == []
+
+
+def test_max_wait_runs_while_people_keep_talking():
+    # segment every 0.6 s never lets the 1 s debounce fire; the 1.5 s max wait does
+    llm = asyncio.run(_auto_scenario([0, 0.6, 1.2, 1.8, 2.4], wait=0.3, summary_debounce_s=1.0,
+                                     summary_max_wait_s=1.5, summary_min_segments=1))
+    assert len(llm.requests) == 1
+    assert "line 3" in llm.user_msg(0) and "line 4" not in llm.user_msg(0)
+
+
+def test_max_wait_zero_is_off():
+    llm = asyncio.run(_auto_scenario([0, 0.6, 1.2, 1.8, 2.4], wait=0.3, summary_debounce_s=1.0,
+                                     summary_max_wait_s=0, summary_min_segments=1))
     assert llm.requests == []
 
 

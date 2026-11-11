@@ -41,15 +41,22 @@ Write all text values in {language}.
 Return ONLY a JSON object, no Markdown and no other text, with this exact shape:
 {{
   "summary": "overall summary of the whole conversation so far",
+  "update_last_item": null,
   "items": [{{"type": "info" | "action" | "question", "speaker": "You" | "Others", "text": "..."}}],
   "next_actions": ["what the user should do next"],
   "suggested_answers": [{{"for": "the question or action to answer", "answer": "a reply the user can say"}}]
 }}
 "info" is a fact or decision, "action" is a task or commitment, "question" is a question that was asked.
+"items" lists only the NEW items of the new conversation. Never repeat an item from "Recent items".
+If the new conversation continues the LAST item of "Recent items" (the same point with more detail or a change),
+set "update_last_item" to the complete updated item (same shape as an item) instead of adding a new item.
+Otherwise set "update_last_item" to null.
+"next_actions" and "suggested_answers" are only about the latest part of the conversation: what the user
+should do and say now. Do not keep older ones.
 Suggested answers are replies the user ("You") can give to open questions or requests from "Others".
-When a "Summary so far" is given, return an updated summary of the WHOLE conversation, not only the new part:
-keep every item, next action and suggested answer from the summary so far that is still relevant,
-merge duplicates, update or drop the ones the new conversation resolves, and add the new ones."""
+When a "Summary so far" is given, "summary" covers the WHOLE conversation, not only the new part."""
+
+RECENT_ITEMS = 8  # earlier items shown to the LLM so it can avoid duplicates and extend the last one
 
 TypedTranscript = list[dict]
 
@@ -84,10 +91,19 @@ def overlap_for(entries: TypedTranscript, covered_id: Optional[int], first_new: 
     return [e for e in entries if e["id"] <= covered_id and e.get("wall_start", 0) >= start]
 
 
+def format_item(item: dict) -> str:
+    return f"- [{item.get('type', 'info')}] {item.get('speaker', 'Others')}: {item.get('text', '')}"
+
+
 def summary_to_text(summary: dict) -> str:
-    """The previous summary in the same JSON shape the LLM must return, so it can carry
-    every block (items, next actions, suggested answers) forward in a rolling update."""
-    return json.dumps(summary, ensure_ascii=False, indent=1)
+    """The previous summary for a rolling update: the overall summary and the recent items.
+    Next actions and suggested answers are not sent: each run makes new ones."""
+    parts = [summary.get("summary") or "-"]
+    recent = (summary.get("items") or [])[-RECENT_ITEMS:]
+    if recent:
+        parts.append("Recent items (oldest first; only the last one can be updated):")
+        parts.extend(format_item(it) for it in recent)
+    return "\n".join(parts)
 
 
 def build_content(prev_summary: Optional[dict], overlap: TypedTranscript, new: TypedTranscript) -> str:
@@ -122,15 +138,7 @@ def parse_summary(reply: str) -> dict:
     if not isinstance(data, dict):
         raise ValueError("LLM reply is not a JSON object")
 
-    items = []
-    for it in data.get("items") or []:
-        if not isinstance(it, dict):
-            continue
-        t = str(it.get("type", "")).strip().lower()
-        if t not in ITEM_TYPES or not it.get("text"):
-            continue
-        speaker = "You" if str(it.get("speaker", "")).strip().lower() == "you" else "Others"
-        items.append({"type": t, "speaker": speaker, "text": str(it["text"]).strip()})
+    items = [i for i in (_parse_item(it) for it in data.get("items") or []) if i]
 
     answers = []
     for a in data.get("suggested_answers") or []:
@@ -144,6 +152,41 @@ def parse_summary(reply: str) -> dict:
         "items": items,
         "next_actions": [str(a).strip() for a in data.get("next_actions") or [] if str(a).strip()],
         "suggested_answers": answers,
+        "update_last_item": _parse_item(data.get("update_last_item")),
+    }
+
+
+def _parse_item(it) -> Optional[dict]:
+    if not isinstance(it, dict):
+        return None
+    t = str(it.get("type", "")).strip().lower()
+    if t not in ITEM_TYPES or not it.get("text"):
+        return None
+    speaker = "You" if str(it.get("speaker", "")).strip().lower() == "you" else "Others"
+    return {"type": t, "speaker": speaker, "text": str(it["text"]).strip()}
+
+
+def merge_summary(prev: Optional[dict], result: dict) -> dict:
+    """Apply one LLM result to the previous summary. Earlier items are kept by the code, not
+    the LLM: the LLM can only replace the last item or append new ones. Next actions and
+    suggested answers are replaced by the latest ones."""
+    items = [dict(i) for i in (prev or {}).get("items") or []]
+    update = result.get("update_last_item")
+    if update:
+        if items:
+            items[-1] = update
+        else:
+            items.append(update)
+    seen = {i["text"].casefold() for i in items}
+    for it in result.get("items") or []:
+        if it["text"].casefold() not in seen:
+            items.append(it)
+            seen.add(it["text"].casefold())
+    return {
+        "summary": result.get("summary") or (prev or {}).get("summary", ""),
+        "items": items,
+        "next_actions": list(result.get("next_actions") or []),
+        "suggested_answers": list(result.get("suggested_answers") or []),
     }
 
 
@@ -170,7 +213,8 @@ class SummaryService:
         self.error = ""
         self.updated_at: Optional[float] = None
 
-        self._timer: Optional[asyncio.TimerHandle] = None
+        self._timer: Optional[asyncio.TimerHandle] = None  # debounce: silence after the last segment
+        self._max_timer: Optional[asyncio.TimerHandle] = None  # max wait while people keep talking
         self._running = False
         self._pending = False
         self._generation = 0  # bumped by reset(); stale runs drop their result
@@ -189,6 +233,10 @@ class SummaryService:
         self.language = language_name(cfg.preferred_language)
         self.mode = cfg.summary_mode
         self.debounce_s = max(1.0, float(cfg.summary_debounce_s))
+        # 0 disables the max wait; otherwise never shorter than the debounce
+        self.max_wait_s = float(cfg.summary_max_wait_s)
+        if self.max_wait_s > 0:
+            self.max_wait_s = max(self.debounce_s, self.max_wait_s)
         self.min_segments = max(1, int(cfg.summary_min_segments))
         self.window_s = max(60.0, float(cfg.summary_window_s))
         self.overlap_s = max(0.0, float(cfg.summary_overlap_s))
@@ -243,21 +291,34 @@ class SummaryService:
     # --- triggers ---
 
     def notify_segment(self) -> None:
-        """Called for every final segment. Restarts the auto debounce timer."""
+        """Called for every final segment. Restarts the debounce timer (run after a pause) and
+        starts the max-wait timer if it is not running (run while people keep talking)."""
         if self.mode != "auto" or not self.is_configured:
             return
-        self._cancel_timer()
         loop = asyncio.get_running_loop()
-        self._timer = loop.call_later(self.debounce_s, self._on_timer)
-
-    def _cancel_timer(self) -> None:
         if self._timer is not None:
             self._timer.cancel()
-            self._timer = None
+        self._timer = loop.call_later(self.debounce_s, self._on_debounce)
+        if self._max_timer is None and self.max_wait_s > 0:
+            self._max_timer = loop.call_later(self.max_wait_s, self._on_max_wait)
 
-    def _on_timer(self) -> None:
+    def _cancel_timer(self) -> None:
+        for t in (self._timer, self._max_timer):
+            if t is not None:
+                t.cancel()
+        self._timer = self._max_timer = None
+
+    def _on_debounce(self) -> None:
         self._timer = None
+        self._maybe_trigger()
+
+    def _on_max_wait(self) -> None:
+        self._max_timer = None
+        self._maybe_trigger()
+
+    def _maybe_trigger(self) -> None:
         if len(self._new_entries()) >= self.min_segments:
+            self._cancel_timer()
             self.trigger()
 
     def trigger(self) -> None:
@@ -318,7 +379,7 @@ class SummaryService:
                 result = await self._call_llm(content, chunk_index=i, chunk_count=len(chunks))
                 if generation != self._generation:
                     return  # transcript was cleared during the call
-                prev, covered = result, chunk[-1]["id"]
+                prev, covered = merge_summary(prev, result), chunk[-1]["id"]
                 self.summary, self.covered_id = prev, covered
             self.status = "ok"
             self.updated_at = time.time()

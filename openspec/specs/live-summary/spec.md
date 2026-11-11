@@ -15,7 +15,7 @@ The system SHALL generate the summary with the OpenAI-compatible chat completion
 - **THEN** the summary status becomes `error` with the message `LLM not configured` and no HTTP request is sent
 
 ### Requirement: Summary trigger modes
-The system SHALL support the trigger modes `auto` and `manual`, set by `summary_mode`. In `auto` mode, each final segment SHALL restart a timer of `summary_debounce_s` seconds. When the timer fires, the system SHALL start a run only if at least `summary_min_segments` final segments arrived since the last successful summary. A manual run (`POST /api/summary/run`) SHALL start at once in both modes, with no minimum segment count. The system SHALL NOT run two summaries in parallel. A trigger during a run SHALL cause exactly one more run after the current run ends.
+The system SHALL support the trigger modes `auto` and `manual`, set by `summary_mode`. In `auto` mode, each final segment SHALL restart a timer of `summary_debounce_s` seconds (run after a pause). The first final segment after a run is scheduled SHALL also start a timer of `summary_max_wait_s` seconds that new segments do not restart (run while people keep talking); `summary_max_wait_s = 0` turns it off. When either timer fires, the system SHALL start a run only if at least `summary_min_segments` final segments arrived since the last successful summary. A manual run (`POST /api/summary/run`) SHALL start at once in both modes, with no minimum segment count. The system SHALL NOT run two summaries in parallel. A trigger during a run SHALL cause exactly one more run after the current run ends.
 
 #### Scenario: Auto run after silence
 - **WHEN** `summary_mode = "auto"`, `summary_debounce_s = 10`, `summary_min_segments = 2`, and 3 new final segments arrive with no further segment for 10 seconds
@@ -24,6 +24,10 @@ The system SHALL support the trigger modes `auto` and `manual`, set by `summary_
 #### Scenario: Debounce restarts on new speech
 - **WHEN** a new final segment arrives 6 seconds after the previous one in `auto` mode with `summary_debounce_s = 10`
 - **THEN** no run starts until 10 seconds after the latest segment
+
+#### Scenario: Auto run while people keep talking
+- **WHEN** `summary_mode = "auto"`, `summary_debounce_s = 10`, `summary_max_wait_s = 60`, and a new final segment arrives every 5 seconds for 2 minutes
+- **THEN** the system starts a run 60 seconds after the first new segment, and again about 60 seconds after the first segment that arrives after that run was scheduled
 
 #### Scenario: Too few new segments
 - **WHEN** the debounce timer fires and only 1 new segment exists with `summary_min_segments = 2`
@@ -38,7 +42,7 @@ The system SHALL support the trigger modes `auto` and `manual`, set by `summary_
 - **THEN** the system starts one more run after the current run ends, and never two at the same time
 
 ### Requirement: Summary input is original text with a sliding window
-The summary input SHALL contain only the original segment text, one line per segment, formatted as `[HH:MM:SS] <speaker>: <text>` with the local wall-clock time. `<speaker>` is `You` or `Others`. Translations SHALL NOT be included. When no previous summary exists and the transcript spans `summary_window_s` seconds or less, the input SHALL be the full transcript. When a previous summary exists, the input SHALL contain the previous summary (all 4 blocks), then the already-summarized segments from the last `summary_overlap_s` seconds before the first new segment, then the new segments. When the new segments span more than `summary_window_s` seconds, the system SHALL summarize them in sequential windows of at most `summary_window_s` seconds, and each window SHALL use the result of the window before it as the previous summary.
+The summary input SHALL contain only the original segment text, one line per segment, formatted as `[HH:MM:SS] <speaker>: <text>` with the local wall-clock time. `<speaker>` is `You` or `Others`. Translations SHALL NOT be included. When no previous summary exists and the transcript spans `summary_window_s` seconds or less, the input SHALL be the full transcript. When a previous summary exists, the input SHALL contain the previous overall summary and its last 8 items, then the already-summarized segments from the last `summary_overlap_s` seconds before the first new segment, then the new segments. When the new segments span more than `summary_window_s` seconds, the system SHALL summarize them in sequential windows of at most `summary_window_s` seconds, and each window SHALL use the result of the window before it as the previous summary.
 
 #### Scenario: Translations excluded
 - **WHEN** a segment has the text "Hello" and the translation `vi: "Xin chào"`
@@ -57,7 +61,7 @@ The summary input SHALL contain only the original segment text, one line per seg
 - **THEN** the system makes 3 sequential LLM calls, and the final summary covers all 25 minutes
 
 ### Requirement: Editable prompt template with fixed output contract
-The user prompt SHALL come from `summary_prompt`, or from the built-in default template when `summary_prompt` is empty. The system SHALL replace `{{content}}` with the summary input, `{{context}}` with the session context, and `{{language}}` with the English name of `preferred_language`. If the template has no `{{content}}`, the system SHALL add the input at the end. The system SHALL send a fixed system message. The message SHALL say that `You` is the user and `Others` is the other party, and it SHALL ask for JSON only with the fields `summary`, `items` (each with `type` in `info|action|question`, `speaker` in `You|Others`, and `text`), `next_actions` and `suggested_answers` (each with `for` and `answer`).
+The user prompt SHALL come from `summary_prompt`, or from the built-in default template when `summary_prompt` is empty. The system SHALL replace `{{content}}` with the summary input, `{{context}}` with the session context, and `{{language}}` with the English name of `preferred_language`. If the template has no `{{content}}`, the system SHALL add the input at the end. The system SHALL send a fixed system message. The message SHALL say that `You` is the user and `Others` is the other party, and it SHALL ask for JSON only with the fields `summary`, `update_last_item`, `items` (each with `type` in `info|action|question`, `speaker` in `You|Others`, and `text`), `next_actions` and `suggested_answers` (each with `for` and `answer`).
 
 #### Scenario: Placeholders replaced
 - **WHEN** the template is `Lang {{language}}. Ctx {{context}}. Content: {{content}}`, `preferred_language = "vi"`, and the context is "Sprint review"
@@ -70,6 +74,21 @@ The user prompt SHALL come from `summary_prompt`, or from the built-in default t
 #### Scenario: Reset to default
 - **WHEN** the user clicks "Reset to default" in the AI Summary settings and saves
 - **THEN** `summary_prompt` is saved as empty and the built-in default template is used
+
+### Requirement: Rolling items and latest actions
+Each run SHALL keep every item of the previous summary in its order. The LLM SHALL return only the new items, and MAY return `update_last_item` to replace the last previous item when the new conversation continues it. The system SHALL append the new items and SHALL skip an item whose text equals an existing item (case-insensitive). The next actions and suggested answers SHALL be the ones of the latest run only; the previous ones SHALL NOT be sent to the LLM and SHALL NOT be kept.
+
+#### Scenario: LLM omits earlier items
+- **WHEN** the previous summary has 3 items and the next LLM reply has 1 new item and `update_last_item: null`
+- **THEN** the summary has the 3 earlier items and then the new item
+
+#### Scenario: Last item continues
+- **WHEN** the previous last item is "Beta ships Friday" and the reply has `update_last_item` "Beta ships Friday without SSO" and no new items
+- **THEN** the item count stays the same and the last item is "Beta ships Friday without SSO"
+
+#### Scenario: Old suggested answers replaced
+- **WHEN** the previous summary has a suggested answer for question A and the new reply has a suggested answer only for question B
+- **THEN** the summary shows only the answer for question B
 
 ### Requirement: Summary result parsing
 The system SHALL parse the LLM reply as JSON after it removes Markdown code fences and any text outside the first `{` and the last `}`. Items with a `type` other than `info`, `action` or `question` SHALL be dropped. A `speaker` other than `You` SHALL be stored as `Others`. If the parse fails, the run SHALL fail, and the previous summary SHALL stay unchanged.
@@ -105,7 +124,7 @@ The backend SHALL provide `GET /api/summary`, which returns `{status, summary, u
 - **THEN** `GET /api/summary` returns `status: "idle"` and `summary: null`
 
 ### Requirement: Summary panel
-The main window SHALL show a summary panel that the user can show or hide with a "Summary" toggle. The panel SHALL show the status and the last update time, a "Summarize now" button, Copy and Export buttons, the session context box, and the 4 blocks: Summary, Items (each with a type label and the speaker), Next actions, and Suggested answers (each with a copy button).
+The main window SHALL show a summary panel that the user can show or hide with a "Summary" toggle. The panel SHALL show the status and the last update time, a "Summarize now" button, Copy and Export buttons, the session context box, and the 4 blocks: Summary, Items (each with a type label and the speaker on one line, and the text on the line below), Next actions, and Suggested answers (each with a copy button).
 
 #### Scenario: Panel renders the 4 blocks
 - **WHEN** a summary with 1 info, 1 action and 1 question item, 2 next actions and 1 suggested answer arrives

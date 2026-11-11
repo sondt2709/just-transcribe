@@ -17,12 +17,24 @@ const TYPE_STYLES: Record<SummaryItemType, string> = {
   question: 'bg-violet-500/15 text-violet-300 border-violet-500/25'
 }
 
+function duration(seconds: number): string {
+  return seconds % 60 === 0 ? `${seconds / 60} min` : `${seconds}s`
+}
+
+function autoRule(debounce: number, maxWait: number): string {
+  return maxWait > 0 ? `${debounce}s pause or ${duration(maxWait)}` : `${debounce}s after pause`
+}
+
 function clock(epochSeconds: number): string {
   return new Date(epochSeconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
 export function SummaryPanel({ port, summary, context, configVersion }: SummaryPanelProps): JSX.Element {
-  const [mode, setMode] = useState<{ auto: boolean; debounce: number }>({ auto: true, debounce: 10 })
+  const [mode, setMode] = useState<{ auto: boolean; debounce: number; maxWait: number }>({
+    auto: true,
+    debounce: 10,
+    maxWait: 60
+  })
   const [ctx, setCtx] = useState(context)
   const [showContext, setShowContext] = useState(false)
   const [copied, setCopied] = useState<string | null>(null)
@@ -37,7 +49,13 @@ export function SummaryPanel({ port, summary, context, configVersion }: SummaryP
     if (!port) return
     fetch(`http://127.0.0.1:${port}/api/config`)
       .then((r) => r.json())
-      .then((cfg) => setMode({ auto: cfg.summary_mode !== 'manual', debounce: cfg.summary_debounce_s ?? 10 }))
+      .then((cfg) =>
+        setMode({
+          auto: cfg.summary_mode !== 'manual',
+          debounce: cfg.summary_debounce_s ?? 10,
+          maxWait: cfg.summary_max_wait_s ?? 60
+        })
+      )
       .catch(() => {})
   }, [port, configVersion])
 
@@ -97,7 +115,7 @@ export function SummaryPanel({ port, summary, context, configVersion }: SummaryP
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-medium text-neutral-200">AI Summary</h2>
           <span className="text-[10px] text-neutral-500">
-            {mode.auto ? `Auto · ${mode.debounce}s after pause` : 'Manual'}
+            {mode.auto ? `Auto · ${autoRule(mode.debounce, mode.maxWait)}` : 'Manual'}
           </span>
         </div>
         <div className="flex items-center gap-1.5 mt-1 text-[11px] min-h-4">
@@ -184,7 +202,9 @@ export function SummaryPanel({ port, summary, context, configVersion }: SummaryP
         {!s && (
           <p className="text-xs text-neutral-600 leading-relaxed">
             {mode.auto
-              ? `The summary updates ${mode.debounce} seconds after the conversation pauses. Click "Summarize now" for an update at once.`
+              ? `The summary updates ${mode.debounce} seconds after the conversation pauses${
+                  mode.maxWait > 0 ? `, or every ${duration(mode.maxWait)} while people keep talking` : ''
+                }. Click "Summarize now" for an update at once.`
               : 'Click "Summarize now" to summarize the transcript.'}
             {summary.error === 'LLM not configured' && ' Set up Translation (LLM) in Settings first.'}
           </p>
@@ -200,20 +220,22 @@ export function SummaryPanel({ port, summary, context, configVersion }: SummaryP
               {s.items.length === 0 ? (
                 <Empty />
               ) : (
-                <ul className="space-y-1.5">
+                <ul className="space-y-2.5">
                   {s.items.map((it, i) => (
-                    <li key={i} className="flex items-start gap-2">
-                      <span className={`mt-0.5 px-1.5 py-px rounded border text-[10px] font-medium shrink-0 w-[58px] text-center ${TYPE_STYLES[it.type]}`}>
-                        {ITEM_LABELS[it.type]}
-                      </span>
-                      <span
-                        className={`mt-0.5 px-1.5 py-px rounded text-[10px] shrink-0 ${
-                          it.speaker === 'You' ? 'bg-teal-500/20 text-teal-400' : 'bg-neutral-700/50 text-neutral-400'
-                        }`}
-                      >
-                        {it.speaker}
-                      </span>
-                      <span className="text-[13px] text-neutral-200 leading-snug">{it.text}</span>
+                    <li key={i}>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`px-1.5 py-px rounded border text-[10px] font-medium ${TYPE_STYLES[it.type]}`}>
+                          {ITEM_LABELS[it.type]}
+                        </span>
+                        <span
+                          className={`px-1.5 py-px rounded text-[10px] ${
+                            it.speaker === 'You' ? 'bg-teal-500/20 text-teal-400' : 'bg-neutral-700/50 text-neutral-400'
+                          }`}
+                        >
+                          {it.speaker}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[13px] text-neutral-200 leading-snug">{it.text}</p>
                     </li>
                   ))}
                 </ul>
