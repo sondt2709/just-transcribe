@@ -11,6 +11,7 @@ interface SetupStatus {
   pythonEnvReady: boolean
   audioteeReady: boolean
   modelsDownloaded: boolean
+  ttsModelDownloaded: boolean
   asrProvider: string
   ready: boolean
 }
@@ -183,6 +184,27 @@ export function Setup({ onComplete }: SetupProps): JSX.Element {
             </p>
           )}
         </StepSection>
+
+        {/* Optional: Qwen3-TTS voice model (never blocks setup) */}
+        {providerChosen && (
+          <div className="mb-4 rounded-lg border border-dashed border-neutral-700 px-4 py-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-neutral-300">Optional: Qwen3-TTS voice model (~1.8 GB)</span>
+              <span className={`text-xs ${status.ttsModelDownloaded ? 'text-green-400' : 'text-neutral-500'}`}>
+                {status.ttsModelDownloaded ? '✓ Downloaded' : 'Skip if not needed'}
+              </span>
+            </div>
+            <p className="text-xs text-neutral-500 mt-1">
+              Translate &amp; Speak works without it, using the macOS voice. Qwen3-TTS adds natural voices for
+              English, Chinese, Japanese, Korean and 6 European languages. You can also download it later in Settings.
+            </p>
+            {!status.ttsModelDownloaded && (
+              <div className="mt-2">
+                <CommandBlock command="hf download mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit" />
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Error */}
         {error && (

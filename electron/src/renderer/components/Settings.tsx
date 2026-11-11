@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { TraceViewer } from './TraceViewer'
+import { SPEAK_LANGUAGES, ENGINE_LABELS } from '../lib/speak'
 
 // Keep in sync with DEFAULT_TEMPLATE in python/src/just_transcribe/pipeline/summarize.py
 const DEFAULT_SUMMARY_PROMPT = `Summarize the following conversation for me.
@@ -40,7 +41,33 @@ interface Config {
   summary_window_s: number
   summary_overlap_s: number
   summary_prompt: string
+  tts_engine: string
+  tts_target_lang: string
+  tts_system_voice: string
+  tts_qwen_model: string
+  tts_qwen_voice: string
+  tts_remote_url: string
+  tts_remote_api_key: string
+  tts_remote_model: string
+  tts_output_device: string
+  tts_fallback_system: boolean
+  tts_speak_mic: boolean
 }
+
+interface TtsStatus {
+  qwen_model: string
+  qwen_languages: string[]
+  qwen_voices: string[]
+  downloaded: boolean
+  downloading: boolean
+  downloaded_bytes: number
+  expected_bytes: number | null
+  download_error: string
+  loaded: boolean
+  system_voice: string | null
+}
+
+const LOCALE_PREFIX: Record<string, string> = { yue: 'zh_HK', zh: 'zh_CN' }
 
 const LANGUAGES = [
   { code: 'en', label: 'English' },
@@ -78,8 +105,24 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
     summary_min_segments: 2,
     summary_window_s: 600,
     summary_overlap_s: 60,
-    summary_prompt: ''
+    summary_prompt: '',
+    tts_engine: 'system',
+    tts_target_lang: 'en',
+    tts_system_voice: '',
+    tts_qwen_model: '',
+    tts_qwen_voice: 'ryan',
+    tts_remote_url: '',
+    tts_remote_api_key: '',
+    tts_remote_model: '',
+    tts_output_device: '',
+    tts_fallback_system: true,
+    tts_speak_mic: false
   })
+  const [ttsStatus, setTtsStatus] = useState<TtsStatus | null>(null)
+  const [voices, setVoices] = useState<{ name: string; locale: string }[]>([])
+  const [devices, setDevices] = useState<string[]>([])
+  const [ttsRemoteModels, setTtsRemoteModels] = useState<string[]>([])
+  const [ttsTestStatus, setTtsTestStatus] = useState<'idle' | 'ok' | 'error'>('idle')
   const [saving, setSaving] = useState(false)
   const [reinstalling, setReinstalling] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -116,6 +159,60 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
       })
       .catch(console.error)
   }, [port])
+
+  // Voice (TTS): voices, devices, model status (polled while downloading)
+  useEffect(() => {
+    if (!port) return
+    fetch(`http://127.0.0.1:${port}/api/tts/voices`).then((r) => r.json()).then((d) => setVoices(d.voices || [])).catch(() => {})
+    fetch(`http://127.0.0.1:${port}/api/tts/devices`).then((r) => r.json()).then((d) => setDevices(d.devices || [])).catch(() => {})
+  }, [port])
+
+  useEffect(() => {
+    if (!port) return
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let alive = true
+    const poll = (): void => {
+      fetch(`http://127.0.0.1:${port}/api/tts/status`)
+        .then((r) => r.json())
+        .then((st: TtsStatus) => {
+          if (!alive) return
+          setTtsStatus(st)
+          if (st.downloading) timer = setTimeout(poll, 1000)
+        })
+        .catch(() => {})
+    }
+    poll()
+    return () => {
+      alive = false
+      if (timer) clearTimeout(timer)
+    }
+  }, [port, ttsStatus?.downloading])
+
+  const startTtsDownload = async (): Promise<void> => {
+    if (!port) return
+    await fetch(`http://127.0.0.1:${port}/api/tts/download`, { method: 'POST' })
+    setTtsStatus((s) => (s ? { ...s, downloading: true, download_error: '' } : s))
+  }
+
+  const testTtsRemote = async (): Promise<void> => {
+    if (!port || !config.tts_remote_url) return
+    setTtsTestStatus('idle')
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/api/llm/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: config.tts_remote_url, api_key: config.tts_remote_api_key })
+      })
+      const result = await res.json()
+      setTtsTestStatus(result.ok ? 'ok' : 'error')
+      setTtsRemoteModels(result.ok ? result.models || [] : [])
+      if (result.ok && !config.tts_remote_model && result.models?.length) {
+        setConfig((c) => ({ ...c, tts_remote_model: result.models[0] }))
+      }
+    } catch {
+      setTtsTestStatus('error')
+    }
+  }
 
   const testRemote = async (url: string, apiKey: string): Promise<boolean> => {
     if (!url) {
@@ -703,6 +800,206 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
             </div>
           </Section>
 
+          {/* ── Voice (TTS) ── */}
+          <Section title="Voice (Translate & Speak)">
+            <div className="bg-neutral-800/50 border border-neutral-800 rounded-lg p-4 space-y-3">
+              <Field label="Engine">
+                <div className="flex gap-2">
+                  {['system', 'qwen_local', 'qwen_remote'].map((e) => (
+                    <button
+                      key={e}
+                      onClick={() => setConfig({ ...config, tts_engine: e })}
+                      className={`flex-1 px-2 py-2 text-xs rounded-lg border transition-colors ${
+                        config.tts_engine === e
+                          ? 'bg-teal-500/20 text-teal-400 border-teal-500/30'
+                          : 'bg-neutral-800 text-neutral-400 border-neutral-700 hover:text-neutral-200'
+                      }`}
+                    >
+                      {ENGINE_LABELS[e]}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+
+              <Field label="Speak in" hint="The language of the other person">
+                <select
+                  value={config.tts_target_lang}
+                  onChange={(e) => setConfig({ ...config, tts_target_lang: e.target.value })}
+                  className={selectClass}
+                >
+                  {SPEAK_LANGUAGES.map((l) => (
+                    <option key={l.code} value={l.code}>{l.label}</option>
+                  ))}
+                </select>
+              </Field>
+
+              {config.tts_engine === 'system' ? (
+                <Field label="macOS voice" hint="Add voices in System Settings → Accessibility → Spoken Content">
+                  <select
+                    value={config.tts_system_voice}
+                    onChange={(e) => setConfig({ ...config, tts_system_voice: e.target.value })}
+                    className={selectClass}
+                  >
+                    <option value="">Automatic for the language</option>
+                    {voices
+                      .filter((v) => {
+                        const prefix = LOCALE_PREFIX[config.tts_target_lang]
+                        return prefix ? v.locale === prefix : v.locale.split('_')[0] === config.tts_target_lang
+                      })
+                      .map((v) => (
+                        <option key={v.name} value={v.name}>{v.name} ({v.locale})</option>
+                      ))}
+                  </select>
+                </Field>
+              ) : (
+                <>
+                  <Field label="Qwen3-TTS voice">
+                    <select
+                      value={config.tts_qwen_voice}
+                      onChange={(e) => setConfig({ ...config, tts_qwen_voice: e.target.value })}
+                      className={selectClass}
+                    >
+                      {(ttsStatus?.qwen_voices ?? ['ryan']).map((v) => (
+                        <option key={v} value={v}>{v}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  <label className="flex items-start gap-2 text-sm text-neutral-300">
+                    <input
+                      type="checkbox"
+                      checked={config.tts_fallback_system}
+                      onChange={(e) => setConfig({ ...config, tts_fallback_system: e.target.checked })}
+                      className="rounded mt-1"
+                    />
+                    <span>
+                      Use the macOS voice for other languages
+                      <span className="block text-xs text-neutral-600">
+                        Qwen3-TTS lists: {(ttsStatus?.qwen_languages ?? []).join(', ')}. Vietnamese is not listed.
+                      </span>
+                    </span>
+                  </label>
+                </>
+              )}
+
+              {config.tts_engine === 'qwen_local' && ttsStatus && (
+                <Field label="Qwen3-TTS model" hint={ttsStatus.qwen_model}>
+                  {ttsStatus.downloaded && !ttsStatus.downloading ? (
+                    <div className="flex items-center gap-2 text-xs text-green-400">
+                      <div className="w-2 h-2 rounded-full bg-green-400" />
+                      Downloaded{ttsStatus.loaded ? ' · loaded' : ' · loads on first use (~40 s)'}
+                    </div>
+                  ) : ttsStatus.downloading ? (
+                    <div>
+                      <div className="h-1.5 bg-neutral-800 rounded overflow-hidden">
+                        <div
+                          className="h-full bg-teal-500 transition-all"
+                          style={{
+                            width: `${ttsStatus.expected_bytes ? Math.min(100, (100 * ttsStatus.downloaded_bytes) / ttsStatus.expected_bytes) : 50}%`
+                          }}
+                        />
+                      </div>
+                      <p className="text-xs text-neutral-500 mt-1">
+                        Downloading… {(ttsStatus.downloaded_bytes / 1e9).toFixed(2)}
+                        {ttsStatus.expected_bytes ? ` / ${(ttsStatus.expected_bytes / 1e9).toFixed(1)}` : ''} GB
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={startTtsDownload}
+                        className="px-3 py-1.5 text-sm bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-colors"
+                      >
+                        Download (~2 GB)
+                      </button>
+                      {ttsStatus.download_error && (
+                        <span className="text-xs text-red-400 truncate" title={ttsStatus.download_error}>
+                          {ttsStatus.download_error}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </Field>
+              )}
+
+              {config.tts_engine === 'qwen_remote' && (
+                <>
+                  <Field label="Server URL" hint="OpenAI-compatible /v1/audio/speech, e.g. mlx_audio.server">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="e.g. http://127.0.0.1:8000"
+                        value={config.tts_remote_url}
+                        onChange={(e) => {
+                          setConfig({ ...config, tts_remote_url: e.target.value })
+                          setTtsTestStatus('idle')
+                        }}
+                        className={`flex-1 ${inputClass}`}
+                      />
+                      <button
+                        onClick={testTtsRemote}
+                        disabled={!config.tts_remote_url}
+                        className="px-3 py-2 text-sm bg-neutral-700 text-neutral-300 rounded-lg hover:bg-neutral-600 disabled:opacity-50 transition-colors shrink-0"
+                      >
+                        Test
+                      </button>
+                    </div>
+                  </Field>
+                  {ttsTestStatus !== 'idle' && (
+                    <div className={`flex items-center gap-2 text-xs ${ttsTestStatus === 'ok' ? 'text-green-400' : 'text-red-400'}`}>
+                      <div className={`w-2 h-2 rounded-full ${ttsTestStatus === 'ok' ? 'bg-green-400' : 'bg-red-400'}`} />
+                      {ttsTestStatus === 'ok' ? 'Connected' : 'Connection failed'}
+                    </div>
+                  )}
+                  <Field label="API Key (optional)">
+                    <input
+                      type="password"
+                      value={config.tts_remote_api_key}
+                      onChange={(e) => setConfig({ ...config, tts_remote_api_key: e.target.value })}
+                      className={inputClass}
+                    />
+                  </Field>
+                  <Field label="Model">
+                    {ttsRemoteModels.length > 0 ? (
+                      <select
+                        value={config.tts_remote_model}
+                        onChange={(e) => setConfig({ ...config, tts_remote_model: e.target.value })}
+                        className={selectClass}
+                      >
+                        {ttsRemoteModels.map((m) => (
+                          <option key={m} value={m}>{m}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        placeholder="e.g. mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit"
+                        value={config.tts_remote_model}
+                        onChange={(e) => setConfig({ ...config, tts_remote_model: e.target.value })}
+                        className={inputClass}
+                      />
+                    )}
+                  </Field>
+                </>
+              )}
+
+              <Field label="Output device" hint="To send the voice into a call, select a virtual device (e.g. BlackHole) and use it as the call's microphone">
+                <select
+                  value={config.tts_output_device}
+                  onChange={(e) => setConfig({ ...config, tts_output_device: e.target.value })}
+                  className={selectClass}
+                >
+                  <option value="">System default</option>
+                  {config.tts_output_device && !devices.includes(config.tts_output_device) && (
+                    <option value={config.tts_output_device}>{config.tts_output_device} (not connected)</option>
+                  )}
+                  {devices.map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+          </Section>
+
           {/* ── Section 4: Overlay & System ── */}
           <Section title="Overlay & System">
             <Field label="Overlay Position" hint="Where captions appear when in overlay mode">
@@ -780,6 +1077,7 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
                   <UninstallItem label="Remove app" command="rm -rf /Applications/Just\ Transcribe.app" />
                   <UninstallItem label="Remove app data" command="rm -rf ~/.just-transcribe ~/Library/Application\ Support/just-transcribe" />
                   <UninstallItem label="Remove ASR model (~3.5 GB)" command="rm -rf ~/.cache/huggingface/hub/models--Qwen--Qwen3-ASR-1.7B" />
+                  <UninstallItem label="Remove voice model (~2 GB)" command="rm -rf ~/.cache/huggingface/hub/models--mlx-community--Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit" />
                   <p className="text-xs text-neutral-600 mt-1">
                     Run in Terminal to remove each component.
                   </p>

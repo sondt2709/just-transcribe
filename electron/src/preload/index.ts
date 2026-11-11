@@ -7,6 +7,7 @@ export interface SetupStatus {
   pythonEnvReady: boolean
   audioteeReady: boolean
   modelsDownloaded: boolean
+  ttsModelDownloaded: boolean
   asrProvider: string
   ready: boolean
 }
