@@ -20,6 +20,8 @@
 - [x] 3.5 Speak my speech: in `_on_segment`, enqueue final `You` segments when `tts_speak_mic` is on
 - [x] 3.6 Test the endpoints and the Speak my speech hook with fake engines
 
+- [x] 3.7 `save_config` merges the backend keys into the existing file, so the Electron keys survive a backend save (the Speak tab saves on each toggle); test
+
 ## 4. UI (Electron)
 
 - [x] 4.1 Handle `speak` events in `useTranscript.ts` (utterance list by id)

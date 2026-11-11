@@ -17,6 +17,10 @@ The frontend SHALL cache local and remote ASR configuration values independently
 - **WHEN** `config.toml` was written by an older version and has no `summary_*` keys
 - **THEN** the system loads it without error and uses the summary defaults
 
+#### Scenario: Backend save keeps Electron keys
+- **WHEN** `config.toml` contains `overlay_enabled = true` and the backend saves the config (Settings → Save or a Speak tab toggle)
+- **THEN** `overlay_enabled`, `overlay_position`, `overlay_bounds`, `overlay_click_through` and `launch_at_login` keep their values
+
 #### Scenario: Old config without TTS keys
 - **WHEN** `config.toml` has no `tts_*` keys
 - **THEN** the system loads it without error, uses the macOS voice engine, and downloads nothing

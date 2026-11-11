@@ -6,6 +6,7 @@ import logging
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -164,13 +165,27 @@ def load_config() -> AppConfig:
         return AppConfig()
 
 
-def save_config(config: AppConfig) -> None:
-    """Save config to TOML file."""
+def save_config(config: AppConfig, path: Optional[Path] = None) -> None:
+    """Save config to TOML file.
+
+    Keys this backend does not own (the Electron main process writes overlay_*
+    and launch_at_login to the same file) are kept: the file is read, the
+    backend keys are updated, and the merged result is written back.
+    """
+    path = path or CONFIG_FILE
     ensure_directories()
     try:
+        import tomli
         import tomli_w
 
-        with open(CONFIG_FILE, "wb") as f:
-            tomli_w.dump(config.to_dict(), f)
+        existing: dict = {}
+        if path.exists():
+            try:
+                with open(path, "rb") as f:
+                    existing = tomli.load(f)
+            except Exception as e:
+                logger.warning("Config file unreadable, rewriting it: %s", e)
+        with open(path, "wb") as f:
+            tomli_w.dump({**existing, **config.to_dict()}, f)
     except Exception as e:
         logger.error("Failed to save config: %s", e)
