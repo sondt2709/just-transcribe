@@ -123,10 +123,12 @@ function onDisplaysChanged(): void {
 // ── Window creation ──
 
 function createMainWindow(): void {
+  // Room for transcript + summary + the sidebar with the Speak section, within the screen
+  const workArea = screen.getPrimaryDisplay().workAreaSize
   mainWindow = new BrowserWindow({
-    width: 1100,
-    height: 750,
-    minWidth: 800,
+    width: Math.min(1280, workArea.width),
+    height: Math.min(880, workArea.height),
+    minWidth: 960, // transcript keeps ~320 px next to the summary panel and the sidebar
     minHeight: 600,
     titleBarStyle: 'hiddenInset',
     backgroundColor: '#0a0a0a',
