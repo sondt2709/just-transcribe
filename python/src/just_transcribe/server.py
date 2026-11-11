@@ -183,7 +183,7 @@ def create_app(
         state.orchestrator.on_error = lambda msg: _on_error(state, msg)
         state.orchestrator.on_stall = lambda data: _on_stall(state, data)
         state.orchestrator.set_ws_client_count(lambda: len(state.ws_clients))
-        state.orchestrator.set_playback_probe(state.speech.playback_active)
+        state.orchestrator.set_playback_probe(state.speech.playback_overlaps)
 
         try:
             await state.orchestrator.start(mic=mic, speaker=speaker)

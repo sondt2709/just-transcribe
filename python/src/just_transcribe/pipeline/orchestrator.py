@@ -82,8 +82,8 @@ class PipelineOrchestrator:
 
         # Half-duplex: track when speaker last had voice
         self._speaker_voice_last: float = -10.0
-        # True while the app itself is speaking (TTS) + a short release window
-        self._playback_active: Callable[[], bool] = lambda: False
+        # (t0, t1) in time.monotonic -> True if the app was speaking (TTS) then
+        self._playback_overlaps: Callable[[float, float], bool] = lambda t0, t1: False
 
         # Final-segment worker queues: source -> queue of (trace_id, SpeechSegment)
         self._final_queues: dict[str, asyncio.Queue] = {}
@@ -191,9 +191,9 @@ class PipelineOrchestrator:
         self._tracer.trace("pipeline_stop")
         logger.info("Pipeline stopped")
 
-    def set_playback_probe(self, probe: Callable[[], bool]) -> None:
-        """Mic segments are dropped while probe() is True (the app is speaking)."""
-        self._playback_active = probe
+    def set_playback_probe(self, probe: Callable[[float, float], bool]) -> None:
+        """Mic segments whose time span overlaps app playback (probe(t0, t1), monotonic) are dropped."""
+        self._playback_overlaps = probe
 
     def set_ws_client_count(self, fn: Callable[[], int]) -> None:
         """Provide a callable returning current WebSocket client count (for heartbeat)."""
@@ -258,7 +258,11 @@ class PipelineOrchestrator:
                 if source == "mic":
                     time_since_speaker = elapsed - self._speaker_voice_last
                     speaker_active = self._vad.is_speech_active("speaker")
-                    playback = self._playback_active()
+                    now = self._start_time + elapsed
+                    playback = (
+                        self._playback_overlaps(self._start_time + segment.start_time, self._start_time + segment.end_time)
+                        if segment else self._playback_overlaps(now, now)
+                    )
                     if playback or speaker_active or time_since_speaker < MIC_SUPPRESS_RELEASE_S:
                         if segment:
                             self._tracer.trace(
@@ -409,7 +413,7 @@ class PipelineOrchestrator:
                     if source == "mic":
                         time_since_speaker = elapsed - self._speaker_voice_last
                         if (
-                            self._playback_active()
+                            self._playback_overlaps(self._start_time + elapsed, self._start_time + elapsed)
                             or self._vad.is_speech_active("speaker")
                             or time_since_speaker < MIC_SUPPRESS_RELEASE_S
                         ):

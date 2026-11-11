@@ -91,7 +91,7 @@ The user SHALL be able to select the output device for spoken audio in Settings 
 - **THEN** the system reloads PortAudio and tries once more; when a mic stream is open, the utterance fails with a message to stop and start recording
 
 ### Requirement: The app does not transcribe its own voice
-The system SHALL start `audiotee` with `--exclude-processes <backend PID>`, so the system-audio capture does not contain the spoken audio. While an utterance plays, and for 0.8 seconds after it ends, the system SHALL drop mic segments, and SHALL trace them as `mic_gated` with reason `tts_playback`.
+The system SHALL start `audiotee` with `--exclude-processes <backend PID>`, so the system-audio capture does not contain the spoken audio. The system SHALL drop each mic segment whose time span overlaps a playback, extended by 0.8 seconds after the playback ends, and SHALL trace it as `mic_gated` with reason `tts_playback`. The check SHALL use the segment's start and end times, because a segment becomes final only after the silence that follows it.
 
 #### Scenario: Spoken audio is not in the transcript
 - **WHEN** recording with speaker capture on and the app says "We can ship the beta on Friday"
@@ -100,6 +100,10 @@ The system SHALL start `audiotee` with `--exclude-processes <backend PID>`, so t
 #### Scenario: Mic echo gated
 - **WHEN** the app plays audio on the laptop speakers while the mic is recording
 - **THEN** mic segments during playback are dropped and traced with reason `tts_playback`
+
+#### Scenario: Echo segment that becomes final after the release window
+- **WHEN** the mic hears the end of a playback and its segment becomes final 1 second after the playback ends
+- **THEN** the segment is dropped, because its time span overlaps the playback
 
 ### Requirement: Qwen3-TTS model download
 Settings SHALL show whether the Qwen3-TTS model is downloaded. A "Download" button SHALL download `tts_qwen_model` into the HuggingFace cache in the background, and SHALL show the progress as downloaded size against the expected size. The download SHALL NOT block other features.
