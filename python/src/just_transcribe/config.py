@@ -6,6 +6,7 @@ import logging
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,10 @@ AUDIOTEE_BIN = BIN_DIR / "audiotee"
 # Model defaults
 DEFAULT_ASR_MODEL = "mlx-community/Qwen3-ASR-1.7B-8bit"
 DEFAULT_SAMPLE_RATE = 16000
+
+# TTS defaults
+DEFAULT_TTS_QWEN_MODEL = "mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit"
+TTS_ENGINES = ("system", "qwen_local", "qwen_remote")
 
 # VAD defaults
 VAD_THRESHOLD = 0.5
@@ -53,6 +58,17 @@ class AppConfig:
     summary_window_s: float = 600.0  # max span of new transcript per LLM call
     summary_overlap_s: float = 60.0  # already-summarized transcript repeated for context
     summary_prompt: str = ""  # user template; empty = built-in default
+    tts_engine: str = "system"  # "system" (macOS say), "qwen_local", "qwen_remote"
+    tts_target_lang: str = "en"  # language spoken to the other party
+    tts_system_voice: str = ""  # macOS voice name; empty = first voice for the language
+    tts_qwen_model: str = DEFAULT_TTS_QWEN_MODEL
+    tts_qwen_voice: str = "ryan"
+    tts_remote_url: str = ""  # OpenAI-compatible /v1/audio/speech server
+    tts_remote_api_key: str = ""
+    tts_remote_model: str = ""
+    tts_output_device: str = ""  # output device name; empty = system default
+    tts_fallback_system: bool = True  # macOS voice for languages Qwen3-TTS does not list
+    tts_speak_mic: bool = False  # translate + speak each final "You" segment
 
     def to_dict(self) -> dict:
         return {
@@ -77,6 +93,17 @@ class AppConfig:
             "summary_window_s": self.summary_window_s,
             "summary_overlap_s": self.summary_overlap_s,
             "summary_prompt": self.summary_prompt,
+            "tts_engine": self.tts_engine,
+            "tts_target_lang": self.tts_target_lang,
+            "tts_system_voice": self.tts_system_voice,
+            "tts_qwen_model": self.tts_qwen_model,
+            "tts_qwen_voice": self.tts_qwen_voice,
+            "tts_remote_url": self.tts_remote_url,
+            "tts_remote_api_key": self.tts_remote_api_key,
+            "tts_remote_model": self.tts_remote_model,
+            "tts_output_device": self.tts_output_device,
+            "tts_fallback_system": self.tts_fallback_system,
+            "tts_speak_mic": self.tts_speak_mic,
         }
 
     @classmethod
@@ -103,6 +130,17 @@ class AppConfig:
             summary_window_s=float(data.get("summary_window_s", 600.0)),
             summary_overlap_s=float(data.get("summary_overlap_s", 60.0)),
             summary_prompt=str(data.get("summary_prompt", "")),
+            tts_engine=data.get("tts_engine") if data.get("tts_engine") in TTS_ENGINES else "system",
+            tts_target_lang=str(data.get("tts_target_lang") or "en"),
+            tts_system_voice=str(data.get("tts_system_voice", "")),
+            tts_qwen_model=str(data.get("tts_qwen_model") or DEFAULT_TTS_QWEN_MODEL),
+            tts_qwen_voice=str(data.get("tts_qwen_voice") or "ryan"),
+            tts_remote_url=str(data.get("tts_remote_url", "")),
+            tts_remote_api_key=str(data.get("tts_remote_api_key", "")),
+            tts_remote_model=str(data.get("tts_remote_model", "")),
+            tts_output_device=str(data.get("tts_output_device", "")),
+            tts_fallback_system=bool(data.get("tts_fallback_system", True)),
+            tts_speak_mic=bool(data.get("tts_speak_mic", False)),
         )
 
 
@@ -127,13 +165,27 @@ def load_config() -> AppConfig:
         return AppConfig()
 
 
-def save_config(config: AppConfig) -> None:
-    """Save config to TOML file."""
+def save_config(config: AppConfig, path: Optional[Path] = None) -> None:
+    """Save config to TOML file.
+
+    Keys this backend does not own (the Electron main process writes overlay_*
+    and launch_at_login to the same file) are kept: the file is read, the
+    backend keys are updated, and the merged result is written back.
+    """
+    path = path or CONFIG_FILE
     ensure_directories()
     try:
+        import tomli
         import tomli_w
 
-        with open(CONFIG_FILE, "wb") as f:
-            tomli_w.dump(config.to_dict(), f)
+        existing: dict = {}
+        if path.exists():
+            try:
+                with open(path, "rb") as f:
+                    existing = tomli.load(f)
+            except Exception as e:
+                logger.warning("Config file unreadable, rewriting it: %s", e)
+        with open(path, "wb") as f:
+            tomli_w.dump({**existing, **config.to_dict()}, f)
     except Exception as e:
         logger.error("Failed to save config: %s", e)

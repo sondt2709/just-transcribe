@@ -21,6 +21,7 @@ from just_transcribe.pipeline.asr import ASREngine, ASRProvider, TranscriptSegme
 from just_transcribe.pipeline.asr_remote import RemoteASREngine, test_connection
 from just_transcribe.pipeline.orchestrator import PipelineOrchestrator
 from just_transcribe.pipeline.summarize import SummaryService
+from just_transcribe.pipeline.tts import SoundDevicePlayer, SpeechService, base_lang, output_device_names
 from just_transcribe.pipeline.translate import TranslationResult, TranslationService
 from just_transcribe.pipeline.vad import VoiceActivityDetector
 from just_transcribe.tracing import NullTracer, SessionTracer
@@ -42,6 +43,7 @@ class AppState:
         self.asr: Optional[ASRProvider] = None
         self.translator: Optional[TranslationService] = None
         self.summarizer: Optional[SummaryService] = None
+        self.speech: Optional[SpeechService] = None
         self.stream_manager: Optional[AudioStreamManager] = None
         self.orchestrator: Optional[PipelineOrchestrator] = None
         self.tracer = NullTracer()
@@ -118,6 +120,14 @@ def create_app(
             on_update=lambda snap: state.broadcast({"type": "summary", **snap}),
         )
 
+        state.speech = SpeechService(
+            config, translator=state.translator, on_event=state.broadcast,
+            player=SoundDevicePlayer(
+                can_reload=lambda: not (state.stream_manager and state.stream_manager.mic_active)
+            ),
+        )
+        state.speech.warm_up()
+
         logger.info("Models loaded, server ready")
         print("READY", flush=True)  # Signal to Electron
 
@@ -130,6 +140,8 @@ def create_app(
             await state.translator.close()
         if state.summarizer:
             await state.summarizer.close()
+        if state.speech:
+            await state.speech.close()
 
     app = FastAPI(title="just-transcribe", lifespan=lifespan)
     app.state.app_state = state  # exposed for tests
@@ -171,6 +183,7 @@ def create_app(
         state.orchestrator.on_error = lambda msg: _on_error(state, msg)
         state.orchestrator.on_stall = lambda data: _on_stall(state, data)
         state.orchestrator.set_ws_client_count(lambda: len(state.ws_clients))
+        state.orchestrator.set_playback_probe(state.speech.playback_overlaps)
 
         try:
             await state.orchestrator.start(mic=mic, speaker=speaker)
@@ -285,6 +298,9 @@ def create_app(
             )
         if state.summarizer:
             state.summarizer.configure(state.config)
+        if state.speech:
+            state.speech.configure(state.config)
+            state.speech.warm_up()
 
         return {"status": "ok"}
 
@@ -344,6 +360,52 @@ def create_app(
     async def set_summary_context(body: dict):
         text = state.summarizer.set_context(str(body.get("text", "")))
         return {"status": "ok", "length": len(text)}
+
+    # --- Translate & speak ---
+
+    @app.post("/api/speak")
+    async def speak(body: dict):
+        try:
+            u = await state.speech.speak(
+                str(body.get("text", "")),
+                translate=bool(body.get("translate", True)),
+                target_lang=str(body.get("target_lang") or ""),
+                source_lang=str(body.get("source_lang") or ""),
+            )
+        except ValueError as e:
+            return {"status": "error", "message": str(e)}
+        return {"status": "queued", "id": u.id}
+
+    @app.post("/api/speak/stop")
+    async def speak_stop():
+        state.speech.stop()
+        return {"status": "stopped"}
+
+    @app.post("/api/speak/replay")
+    async def speak_replay(body: dict):
+        try:
+            u = await state.speech.replay(int(body.get("id", 0)))
+        except (KeyError, ValueError):
+            return {"status": "error", "message": "Audio no longer available"}
+        return {"status": "queued", "id": u.id}
+
+    @app.get("/api/tts/status")
+    async def tts_status():
+        return await asyncio.get_running_loop().run_in_executor(None, state.speech.status)
+
+    @app.get("/api/tts/voices")
+    async def tts_voices():
+        voices = await asyncio.get_running_loop().run_in_executor(None, state.speech.system_voices)
+        return {"voices": voices}
+
+    @app.get("/api/tts/devices")
+    async def tts_devices():
+        return {"devices": output_device_names(sd.query_devices())}
+
+    @app.post("/api/tts/download")
+    async def tts_download():
+        started = state.speech.start_download()
+        return {"status": "started" if started else "already_downloading"}
 
     # --- Trace sessions (read-only) ---
 
@@ -496,6 +558,12 @@ def _on_segment(state: AppState, segment: TranscriptSegment) -> None:
     state.broadcast({"type": "segment", **entry})
     if state.summarizer:
         state.summarizer.notify_segment()
+    # Speak my speech: translate + say each final "You" segment
+    if state.speech and state.config.tts_speak_mic and segment.source == "mic" and segment.text.strip():
+        same_lang = base_lang(segment.lang) == base_lang(state.config.tts_target_lang)
+        asyncio.get_running_loop().create_task(
+            state.speech.speak(segment.text, translate=not same_lang, source_lang=segment.lang)
+        )
 
 
 def _on_translation(state: AppState, result: TranslationResult) -> None:

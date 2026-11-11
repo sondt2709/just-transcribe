@@ -39,6 +39,18 @@ const IDLE_SUMMARY: SummaryState = {
   covered_segment_id: null
 }
 
+export interface Utterance {
+  id: number
+  status: 'queued' | 'synthesizing' | 'playing' | 'done' | 'error' | 'stopped'
+  original: string
+  text: string
+  lang: string
+  engine: string
+  error: string
+}
+
+const MAX_UTTERANCES = 30
+
 interface UseTranscriptReturn {
   segments: Segment[]
   interim: InterimState | null
@@ -47,6 +59,7 @@ interface UseTranscriptReturn {
   dismissAlert: () => void
   summary: SummaryState
   summaryContext: string
+  utterances: Utterance[]
 }
 
 export function useTranscript(port: number | null): UseTranscriptReturn {
@@ -56,6 +69,7 @@ export function useTranscript(port: number | null): UseTranscriptReturn {
   const [alert, setAlert] = useState<PipelineAlert | null>(null)
   const [summary, setSummary] = useState<SummaryState>(IDLE_SUMMARY)
   const [summaryContext, setSummaryContext] = useState('')
+  const [utterances, setUtterances] = useState<Utterance[]>([])
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -145,6 +159,20 @@ export function useTranscript(port: number | null): UseTranscriptReturn {
             break
           }
 
+          case 'speak': {
+            const { type: _type, ...u } = data as Utterance & { type: string }
+            setUtterances((prev) => {
+              const i = prev.findIndex((p) => p.id === u.id)
+              if (i >= 0) {
+                const next = [...prev]
+                next[i] = u
+                return next
+              }
+              return [u, ...prev].slice(0, MAX_UTTERANCES)
+            })
+            break
+          }
+
           case 'stall':
             console.warn('Pipeline stall:', data.message)
             setAlert({ kind: 'stall', message: data.message })
@@ -166,5 +194,5 @@ export function useTranscript(port: number | null): UseTranscriptReturn {
 
   const dismissAlert = useCallback(() => setAlert(null), [])
 
-  return { segments, interim, connected, alert, dismissAlert, summary, summaryContext }
+  return { segments, interim, connected, alert, dismissAlert, summary, summaryContext, utterances }
 }

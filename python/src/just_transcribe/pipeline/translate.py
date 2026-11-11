@@ -208,6 +208,43 @@ class TranslationService:
             logger.warning("Translation to %s failed for segment %d: %s", target_lang, segment.id, e)
             return None
 
+    async def translate_once(self, text: str, target_lang: str, source_lang: str = "") -> str:
+        """One-shot translation (no context window). Raises on failure.
+
+        Used by "translate and speak". If the text already is in the target
+        language, the model is told to return it unchanged.
+        """
+        if not self.is_configured:
+            raise RuntimeError("LLM not configured")
+        target_name = LANG_NAMES.get(target_lang, target_lang)
+        src = (source_lang or "").lower().split("-")[0]
+        src_part = f" from {LANG_NAMES.get(src, src)}" if src and src != "unknown" else ""
+        prompt = (
+            f"You are a professional interpreter. Translate the user's text{src_part} to {target_name}, "
+            f"as natural spoken {target_name}. If the text already is in {target_name}, return it unchanged. "
+            "Output ONLY the translation, nothing else."
+        )
+        if self._client is None:
+            self._client = httpx.AsyncClient(timeout=10.0)
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        response = await self._client.post(
+            f"{self.api_base}/v1/chat/completions",
+            headers=headers,
+            json={
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": text},
+                ],
+                "temperature": 0.3,
+                "max_tokens": 512,
+            },
+        )
+        response.raise_for_status()
+        return response.json()["choices"][0]["message"]["content"].strip()
+
     async def close(self) -> None:
         if self._client:
             await self._client.aclose()
