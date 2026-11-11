@@ -12,6 +12,8 @@ import {
 
 interface SpeakPanelProps {
   port: number | null
+  /** True when the Speak tab is visible: refresh config and engine status. */
+  active: boolean
   utterances: Utterance[]
   configVersion: number
   onOpenSettings: () => void
@@ -42,7 +44,7 @@ const STATUS_STYLES: Record<Utterance['status'], string> = {
   stopped: 'text-neutral-600'
 }
 
-export function SpeakPanel({ port, utterances, configVersion, onOpenSettings }: SpeakPanelProps): JSX.Element {
+export function SpeakPanel({ port, active, utterances, configVersion, onOpenSettings }: SpeakPanelProps): JSX.Element {
   const [cfg, setCfg] = useState<TtsConfig>({
     tts_target_lang: 'en',
     tts_engine: 'system',
@@ -68,7 +70,8 @@ export function SpeakPanel({ port, utterances, configVersion, onOpenSettings }: 
       .catch(() => {})
   }
 
-  useEffect(refresh, [port, configVersion])
+  const finished = utterances.filter((u) => u.status === 'done' || u.status === 'error').length
+  useEffect(refresh, [port, configVersion, active, finished])
 
   const update = async (patch: Partial<TtsConfig>): Promise<void> => {
     setCfg((c) => ({ ...c, ...patch }))
@@ -93,15 +96,19 @@ export function SpeakPanel({ port, utterances, configVersion, onOpenSettings }: 
     }
   }
 
-  const active = utterances.filter((u) => u.status === 'playing' || u.status === 'synthesizing')
+  const inFlight = utterances.filter((u) => u.status === 'playing' || u.status === 'synthesizing')
   const queued = utterances.filter((u) => u.status === 'queued')
-  const busy = active.length > 0 || queued.length > 0
+  const busy = inFlight.length > 0 || queued.length > 0
 
   const isQwen = cfg.tts_engine !== 'system'
   const qwenHasLang = status?.qwen_languages.includes(cfg.tts_target_lang) ?? true
   const effectiveEngine = isQwen && !qwenHasLang && cfg.tts_fallback_system ? 'system' : cfg.tts_engine
   const voiceLabel =
-    effectiveEngine === 'system' ? status?.system_voice ?? 'no voice installed' : cfg.tts_qwen_voice
+    effectiveEngine === 'system'
+      ? status === null
+        ? '…'
+        : status.system_voice ?? `no ${languageLabel(cfg.tts_target_lang)} voice installed`
+      : cfg.tts_qwen_voice
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -200,8 +207,8 @@ export function SpeakPanel({ port, utterances, configVersion, onOpenSettings }: 
         <div className="px-4 py-2 border-b border-neutral-800 bg-teal-500/5 shrink-0 flex items-center gap-2">
           <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse shrink-0" />
           <span className="flex-1 text-xs text-teal-200 truncate">
-            {active[0]
-              ? `${active[0].status === 'synthesizing' ? 'Preparing' : 'Speaking'}: ${active[0].text || active[0].original}`
+            {inFlight[0]
+              ? `${inFlight[0].status === 'synthesizing' ? 'Preparing' : 'Speaking'}: ${inFlight[0].text || inFlight[0].original}`
               : 'Waiting…'}
             {queued.length > 0 && <span className="text-neutral-500"> · {queued.length} queued</span>}
           </span>
