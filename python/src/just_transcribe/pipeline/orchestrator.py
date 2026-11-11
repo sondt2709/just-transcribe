@@ -82,6 +82,8 @@ class PipelineOrchestrator:
 
         # Half-duplex: track when speaker last had voice
         self._speaker_voice_last: float = -10.0
+        # True while the app itself is speaking (TTS) + a short release window
+        self._playback_active: Callable[[], bool] = lambda: False
 
         # Final-segment worker queues: source -> queue of (trace_id, SpeechSegment)
         self._final_queues: dict[str, asyncio.Queue] = {}
@@ -189,6 +191,10 @@ class PipelineOrchestrator:
         self._tracer.trace("pipeline_stop")
         logger.info("Pipeline stopped")
 
+    def set_playback_probe(self, probe: Callable[[], bool]) -> None:
+        """Mic segments are dropped while probe() is True (the app is speaking)."""
+        self._playback_active = probe
+
     def set_ws_client_count(self, fn: Callable[[], int]) -> None:
         """Provide a callable returning current WebSocket client count (for heartbeat)."""
         self._ws_client_count = fn
@@ -247,15 +253,18 @@ class PipelineOrchestrator:
                 if source == "speaker" and self._vad.is_speech_active("speaker"):
                     self._speaker_voice_last = elapsed
 
-                # Half-duplex gating: suppress mic when speaker has voice
+                # Half-duplex gating: suppress mic when speaker has voice,
+                # or while the app itself is speaking (TTS echo into the mic)
                 if source == "mic":
                     time_since_speaker = elapsed - self._speaker_voice_last
                     speaker_active = self._vad.is_speech_active("speaker")
-                    if speaker_active or time_since_speaker < MIC_SUPPRESS_RELEASE_S:
+                    playback = self._playback_active()
+                    if playback or speaker_active or time_since_speaker < MIC_SUPPRESS_RELEASE_S:
                         if segment:
                             self._tracer.trace(
                                 "mic_gated", trace_id=trace_id, t=round(elapsed, 3),
-                                reason="speaker_active" if speaker_active else "release_window",
+                                reason="tts_playback" if playback
+                                else "speaker_active" if speaker_active else "release_window",
                                 had_segment=True,
                                 duration_s=round(segment.end_time - segment.start_time, 3),
                             )
@@ -396,10 +405,14 @@ class PipelineOrchestrator:
                     if self._interim_busy[source]:
                         continue
 
-                    # Skip mic if speaker is active (half-duplex)
+                    # Skip mic if speaker is active (half-duplex) or the app is speaking
                     if source == "mic":
                         time_since_speaker = elapsed - self._speaker_voice_last
-                        if self._vad.is_speech_active("speaker") or time_since_speaker < MIC_SUPPRESS_RELEASE_S:
+                        if (
+                            self._playback_active()
+                            or self._vad.is_speech_active("speaker")
+                            or time_since_speaker < MIC_SUPPRESS_RELEASE_S
+                        ):
                             continue
 
                     audio = self._vad.get_pending_audio(source)

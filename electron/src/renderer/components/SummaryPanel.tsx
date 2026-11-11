@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { SummaryState } from '../hooks/useTranscript'
 import { ITEM_LABELS, formatSummaryMarkdown, type SummaryItemType } from '../lib/exportFormat'
 import { exportSummary } from '../lib/transcriptActions'
+import { speakText } from '../lib/speak'
 
 interface SummaryPanelProps {
   port: number | null
@@ -267,6 +268,13 @@ export function SummaryPanel({ port, summary, context, configVersion }: SummaryP
                       {a.for && <p className="text-[11px] text-neutral-500 mb-1">Re: {a.for}</p>}
                       <div className="flex items-start gap-2">
                         <p className="flex-1 text-[13px] text-indigo-100 leading-snug">{a.answer}</p>
+                        <button
+                          onClick={() => port && speakText(port, a.answer).catch(console.error)}
+                          className="text-[11px] text-indigo-300/70 hover:text-indigo-200 shrink-0"
+                          title="Translate and speak this answer"
+                        >
+                          🔊
+                        </button>
                         <button
                           onClick={() => copy(`a${i}`, a.answer)}
                           className="text-[10px] text-indigo-300/70 hover:text-indigo-200 shrink-0"

@@ -166,7 +166,7 @@ export function Controls({
               : 'bg-neutral-800 text-neutral-400 hover:text-neutral-200 border-neutral-700'
           }`}
         >
-          {summaryOpen ? 'Hide Summary' : 'Show Summary'}
+          {summaryOpen ? 'Hide AI Panel' : 'Show AI Panel'}
         </button>
       </div>
 

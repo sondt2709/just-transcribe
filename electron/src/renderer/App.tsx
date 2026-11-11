@@ -5,7 +5,8 @@ import { Transcript } from './components/Transcript'
 import { Controls } from './components/Controls'
 import { Settings } from './components/Settings'
 import { Setup } from './components/Setup'
-import { SummaryPanel } from './components/SummaryPanel'
+import { AiPanel } from './components/AiPanel'
+import { speakText } from './lib/speak'
 
 const SUMMARY_OPEN_KEY = 'summaryPanelOpen'
 
@@ -52,7 +53,8 @@ export default function App(): JSX.Element {
     alert,
     dismissAlert,
     summary,
-    summaryContext
+    summaryContext,
+    utterances
   } = useTranscript(backend.port)
 
   const toggleSummary = useCallback(() => {
@@ -124,17 +126,25 @@ export default function App(): JSX.Element {
       <div className="flex-1 flex overflow-hidden">
         {/* Transcript (main area) */}
         <div className="flex-1 flex flex-col min-w-0">
-          <Transcript segments={segments} interim={interim} />
+          <Transcript
+            segments={segments}
+            interim={interim}
+            onSpeak={(seg) =>
+              backend.port && speakText(backend.port, seg.text, { sourceLang: seg.lang }).catch(console.error)
+            }
+          />
         </div>
 
         {/* AI summary panel */}
         {summaryOpen && (
           <div className="w-[22rem] border-l border-neutral-800 flex flex-col shrink-0 min-h-0 no-drag">
-            <SummaryPanel
+            <AiPanel
               port={backend.port}
               summary={summary}
-              context={summaryContext}
+              summaryContext={summaryContext}
+              utterances={utterances}
               configVersion={configVersion}
+              onOpenSettings={() => setShowSettings(true)}
             />
           </div>
         )}

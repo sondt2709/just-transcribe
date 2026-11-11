@@ -4,6 +4,8 @@ import type { Segment } from '../hooks/useTranscript'
 interface TranscriptProps {
   segments: Segment[]
   interim: { text: string; source: string } | null
+  /** Translate + speak one of the user's own lines (Speak tab target language). */
+  onSpeak?: (seg: Segment) => void
 }
 
 const LANG_LABELS: Record<string, string> = {
@@ -21,7 +23,7 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
-export function Transcript({ segments, interim }: TranscriptProps): JSX.Element {
+export function Transcript({ segments, interim, onSpeak }: TranscriptProps): JSX.Element {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -77,6 +79,17 @@ export function Transcript({ segments, interim }: TranscriptProps): JSX.Element 
                 </div>
               ))}
             </div>
+
+            {/* Speak (own lines only) */}
+            {onSpeak && seg.source === 'mic' && (
+              <button
+                onClick={() => onSpeak(seg)}
+                className="text-xs mt-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity hover:scale-110"
+                title="Translate and speak"
+              >
+                🔊
+              </button>
+            )}
 
             {/* Timestamp */}
             <span className="text-[10px] text-neutral-600 mt-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
