@@ -1,5 +1,6 @@
-import { app, BrowserWindow, ipcMain, shell, screen } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, screen, dialog } from 'electron'
 import { join } from 'path'
+import { writeFile } from 'fs/promises'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { startPythonBackend, stopPythonBackend, getBackendPort } from './python'
 import {
@@ -391,6 +392,30 @@ app.whenReady().then(async () => {
   })
 
   ipcMain.handle('get-backend-port', () => getBackendPort())
+
+  // Save text via the native Save dialog. The renderer never picks the path:
+  // it sends both formats and the main process writes the one that matches
+  // the extension the user chose (.txt -> text, anything else -> markdown).
+  ipcMain.handle(
+    'save-text-file',
+    async (event, args: { defaultName: string; markdown: string; text: string }) => {
+      const parent = BrowserWindow.fromWebContents(event.sender) ?? undefined
+      const options = {
+        defaultPath: join(app.getPath('documents'), args.defaultName),
+        filters: [
+          { name: 'Markdown', extensions: ['md'] },
+          { name: 'Text', extensions: ['txt'] }
+        ]
+      }
+      const result = parent
+        ? await dialog.showSaveDialog(parent, options)
+        : await dialog.showSaveDialog(options)
+      if (result.canceled || !result.filePath) return { saved: false }
+      const content = result.filePath.toLowerCase().endsWith('.txt') ? args.text : args.markdown
+      await writeFile(result.filePath, content, 'utf-8')
+      return { saved: true, path: result.filePath }
+    }
+  )
 
   ipcMain.handle('get-electron-config', () => readElectronConfig())
 

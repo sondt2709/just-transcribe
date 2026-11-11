@@ -1,6 +1,17 @@
 import { useState, useEffect } from 'react'
 import { TraceViewer } from './TraceViewer'
 
+// Keep in sync with DEFAULT_TEMPLATE in python/src/just_transcribe/pipeline/summarize.py
+const DEFAULT_SUMMARY_PROMPT = `Summarize the following conversation for me.
+
+Context about this conversation (may be empty):
+{{context}}
+
+Write in {{language}}.
+
+Content:
+{{content}}`
+
 interface SettingsProps {
   port: number | null
   recording: boolean
@@ -22,6 +33,13 @@ interface Config {
   speaker_enabled: boolean
   asr_timeout_s: number
   debug_audio: boolean
+  summary_mode: string
+  summary_debounce_s: number
+  summary_max_wait_s: number
+  summary_min_segments: number
+  summary_window_s: number
+  summary_overlap_s: number
+  summary_prompt: string
 }
 
 const LANGUAGES = [
@@ -53,7 +71,14 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
     mic_enabled: true,
     speaker_enabled: true,
     asr_timeout_s: 10,
-    debug_audio: false
+    debug_audio: false,
+    summary_mode: 'auto',
+    summary_debounce_s: 10,
+    summary_max_wait_s: 60,
+    summary_min_segments: 2,
+    summary_window_s: 600,
+    summary_overlap_s: 60,
+    summary_prompt: ''
   })
   const [saving, setSaving] = useState(false)
   const [reinstalling, setReinstalling] = useState(false)
@@ -562,6 +587,119 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
                   Configure to enable automatic translation
                 </p>
               )}
+            </div>
+          </Section>
+
+          {/* ── AI Summary ── */}
+          <Section title="AI Summary">
+            <div className="bg-neutral-800/50 border border-neutral-800 rounded-lg p-4 space-y-3">
+              <Field label="Trigger" hint="Uses the Translation (LLM) server and model">
+                <div className="flex gap-2">
+                  {[
+                    { value: 'auto', label: 'Auto (after a pause)' },
+                    { value: 'manual', label: 'Manual (button only)' }
+                  ].map((m) => (
+                    <button
+                      key={m.value}
+                      onClick={() => setConfig({ ...config, summary_mode: m.value })}
+                      className={`flex-1 px-3 py-2 text-sm rounded-lg border transition-colors ${
+                        config.summary_mode === m.value
+                          ? 'bg-teal-500/20 text-teal-400 border-teal-500/30'
+                          : 'bg-neutral-800 text-neutral-400 border-neutral-700 hover:text-neutral-200'
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+
+              {config.summary_mode === 'auto' && (
+                <div className="flex gap-3">
+                  <Field label="Pause (seconds)" hint="Silence after the last line">
+                    <input
+                      type="number"
+                      min={2}
+                      max={300}
+                      value={config.summary_debounce_s}
+                      onChange={(e) => setConfig({ ...config, summary_debounce_s: Number(e.target.value) || 10 })}
+                      className={inputClass}
+                    />
+                  </Field>
+                  <Field label="Max wait (seconds)" hint="While people keep talking; 0 = off">
+                    <input
+                      type="number"
+                      min={0}
+                      max={3600}
+                      value={config.summary_max_wait_s}
+                      onChange={(e) => setConfig({ ...config, summary_max_wait_s: Math.max(0, Number(e.target.value) || 0) })}
+                      className={inputClass}
+                    />
+                  </Field>
+                  <Field label="Min. new lines" hint="Lines since last summary">
+                    <input
+                      type="number"
+                      min={1}
+                      max={50}
+                      value={config.summary_min_segments}
+                      onChange={(e) => setConfig({ ...config, summary_min_segments: Number(e.target.value) || 2 })}
+                      className={inputClass}
+                    />
+                  </Field>
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <Field label="Window (minutes)" hint="Max new transcript per LLM call">
+                  <input
+                    type="number"
+                    min={1}
+                    max={60}
+                    value={Math.round(config.summary_window_s / 60)}
+                    onChange={(e) => setConfig({ ...config, summary_window_s: (Number(e.target.value) || 10) * 60 })}
+                    className={inputClass}
+                  />
+                </Field>
+                <Field label="Overlap (seconds)" hint="Earlier lines repeated">
+                  <input
+                    type="number"
+                    min={0}
+                    max={600}
+                    value={config.summary_overlap_s}
+                    onChange={(e) => setConfig({ ...config, summary_overlap_s: Math.max(0, Number(e.target.value)) })}
+                    className={inputClass}
+                  />
+                </Field>
+              </div>
+
+              <Field
+                label="Prompt template"
+                hint="Placeholders: {{content}} (transcript), {{context}} (session context), {{language}} (preferred language). The app adds the JSON output format."
+              >
+                <textarea
+                  value={config.summary_prompt || DEFAULT_SUMMARY_PROMPT}
+                  onChange={(e) =>
+                    setConfig({
+                      ...config,
+                      summary_prompt: e.target.value === DEFAULT_SUMMARY_PROMPT ? '' : e.target.value
+                    })
+                  }
+                  rows={8}
+                  className={`${inputClass} font-mono text-xs resize-y`}
+                />
+                <div className="flex justify-between items-center mt-1">
+                  <span className="text-[11px] text-neutral-600">
+                    {config.summary_prompt ? 'Custom template' : 'Default template'}
+                  </span>
+                  <button
+                    onClick={() => setConfig({ ...config, summary_prompt: '' })}
+                    disabled={!config.summary_prompt}
+                    className="text-xs text-neutral-500 hover:text-neutral-200 disabled:opacity-40"
+                  >
+                    Reset to default
+                  </button>
+                </div>
+              </Field>
             </div>
           </Section>
 
