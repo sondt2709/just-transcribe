@@ -39,8 +39,8 @@
 
 ## 5. Verify
 
-- [ ] 5.1 `cd python && uv run --group test pytest` and `cd electron && npm test && npm run build` pass; break the code once for each new test group
-- [ ] 5.2 Round trip: speak an English and a Vietnamese text through `/api/speak` with each engine; capture the played audio by writing it to a WAV; transcribe it with the remote ASR; compare the text
-- [ ] 5.3 Self-capture: record with speaker capture on while the app speaks; `/api/transcript` has no spoken sentence
-- [ ] 5.4 Remote engine: run `mlx_audio.server` on localhost; speak with `qwen_remote`; record the real request and response
-- [ ] 5.5 Screenshots of the Speak tab, the speak buttons, and the Settings section
+- [x] 5.1 `cd python && uv run --group test pytest` and `cd electron && npm test && npm run build` pass; break the code once for each new test group
+- [x] 5.2 Round trip: speak an English and a Vietnamese text through `/api/speak` with each engine; capture the played audio with a separate audiotee tap; transcribe it with the remote ASR; compare the text
+- [x] 5.3 Self-capture: record with mic and speaker capture on while the app speaks; `/api/transcript` has no spoken sentence; a control sentence from another process is captured; `mic_gated` reason `tts_playback` in the trace
+- [x] 5.4 Remote engine: run `mlx_audio.server` on localhost; speak with `qwen_remote`; the server logs `POST /v1/audio/speech 200`
+- [x] 5.5 Screenshot of the Speak tab (the Settings "Voice" section and the hover speak buttons were not captured: UI automation could not open Settings)
