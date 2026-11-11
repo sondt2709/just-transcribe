@@ -314,3 +314,37 @@ def test_config_tts_defaults_and_validation():
     assert AppConfig.from_dict({"tts_engine": "bogus"}).tts_engine == "system"
     c2 = AppConfig.from_dict(AppConfig(tts_engine="qwen_remote", tts_output_device="BlackHole 2ch").to_dict())
     assert (c2.tts_engine, c2.tts_output_device) == ("qwen_remote", "BlackHole 2ch")
+
+
+# --- PortAudio reload on a stale device list ---
+
+
+def _player_with_failing_first_open(monkeypatch, can_reload):
+    import sounddevice as sd
+
+    from just_transcribe.pipeline.tts import SoundDevicePlayer
+
+    calls = []
+
+    def fake_play(_sd, audio, sr, device, stop):
+        calls.append("open")
+        if calls.count("open") == 1:
+            raise sd.PortAudioError("Error opening OutputStream: Internal PortAudio error [PaErrorCode -9986]")
+
+    monkeypatch.setattr(SoundDevicePlayer, "_play", staticmethod(fake_play))
+    monkeypatch.setattr(sd, "_terminate", lambda: calls.append("_terminate"))
+    monkeypatch.setattr(sd, "_initialize", lambda: calls.append("_initialize"))
+    return SoundDevicePlayer(can_reload=lambda: can_reload), calls
+
+
+def test_player_reloads_portaudio_and_retries_when_no_mic(monkeypatch):
+    player, calls = _player_with_failing_first_open(monkeypatch, can_reload=True)
+    player.play(np.zeros(10, dtype=np.float32), 16000, "", threading.Event())
+    assert calls == ["open", "_terminate", "_initialize", "open"]
+
+
+def test_player_does_not_reload_while_mic_is_open(monkeypatch):
+    player, calls = _player_with_failing_first_open(monkeypatch, can_reload=False)
+    with pytest.raises(RuntimeError, match="stop and start recording"):
+        player.play(np.zeros(10, dtype=np.float32), 16000, "", threading.Event())
+    assert calls == ["open"]

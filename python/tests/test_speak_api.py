@@ -32,7 +32,7 @@ def client(monkeypatch):
     monkeypatch.setattr(
         server,
         "SpeechService",
-        lambda cfg, translator=None, on_event=None: SpeechService(
+        lambda cfg, translator=None, on_event=None, player=None: SpeechService(
             cfg, translator=FAKE_TRANSLATOR, on_event=on_event, player=FakePlayer(0.05),
             engine_factory=lambda name, c: FakeEngine(name, SYNTH),
         ),

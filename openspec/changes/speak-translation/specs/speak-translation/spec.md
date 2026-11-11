@@ -86,6 +86,10 @@ The user SHALL be able to select the output device for spoken audio in Settings 
 - **WHEN** the saved device is not connected
 - **THEN** the audio plays on the system default output
 
+#### Scenario: Device list changed
+- **WHEN** opening the output stream fails with a PortAudio error and no mic stream is open
+- **THEN** the system reloads PortAudio and tries once more; when a mic stream is open, the utterance fails with a message to stop and start recording
+
 ### Requirement: The app does not transcribe its own voice
 The system SHALL start `audiotee` with `--exclude-processes <backend PID>`, so the system-audio capture does not contain the spoken audio. While an utterance plays, and for 0.8 seconds after it ends, the system SHALL drop mic segments, and SHALL trace them as `mic_gated` with reason `tts_playback`.
 

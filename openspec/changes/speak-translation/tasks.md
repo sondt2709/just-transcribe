@@ -22,6 +22,8 @@
 
 - [x] 3.7 `save_config` merges the backend keys into the existing file, so the Electron keys survive a backend save (the Speak tab saves on each toggle); test
 
+- [x] 3.8 On a PortAudio error when the output opens, reload PortAudio and retry once if no mic stream is open; test
+
 ## 4. UI (Electron)
 
 - [x] 4.1 Handle `speak` events in `useTranscript.ts` (utterance list by id)

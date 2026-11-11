@@ -21,7 +21,7 @@ from just_transcribe.pipeline.asr import ASREngine, ASRProvider, TranscriptSegme
 from just_transcribe.pipeline.asr_remote import RemoteASREngine, test_connection
 from just_transcribe.pipeline.orchestrator import PipelineOrchestrator
 from just_transcribe.pipeline.summarize import SummaryService
-from just_transcribe.pipeline.tts import SpeechService, base_lang, output_device_names
+from just_transcribe.pipeline.tts import SoundDevicePlayer, SpeechService, base_lang, output_device_names
 from just_transcribe.pipeline.translate import TranslationResult, TranslationService
 from just_transcribe.pipeline.vad import VoiceActivityDetector
 from just_transcribe.tracing import NullTracer, SessionTracer
@@ -120,7 +120,12 @@ def create_app(
             on_update=lambda snap: state.broadcast({"type": "summary", **snap}),
         )
 
-        state.speech = SpeechService(config, translator=state.translator, on_event=state.broadcast)
+        state.speech = SpeechService(
+            config, translator=state.translator, on_event=state.broadcast,
+            player=SoundDevicePlayer(
+                can_reload=lambda: not (state.stream_manager and state.stream_manager.mic_active)
+            ),
+        )
         state.speech.warm_up()
 
         logger.info("Models loaded, server ready")
