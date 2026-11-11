@@ -348,3 +348,14 @@ def test_player_does_not_reload_while_mic_is_open(monkeypatch):
     with pytest.raises(RuntimeError, match="stop and start recording"):
         player.play(np.zeros(10, dtype=np.float32), 16000, "", threading.Event())
     assert calls == ["open"]
+
+
+def test_playback_overlaps_uses_the_span():
+    import time as _t
+
+    svc, *_ = make()
+    now = _t.monotonic()
+    svc._intervals.append((now - 3.0, now - 2.5))  # played 3.0..2.5 s ago
+    assert svc.playback_overlaps(now - 3.2, now - 1.0)  # a segment that spanned the playback
+    assert svc.playback_overlaps(now - 2.0, now - 1.9)  # inside the 0.8 s release
+    assert not svc.playback_overlaps(now - 1.5, now)  # after the release

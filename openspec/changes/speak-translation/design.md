@@ -46,7 +46,7 @@ Spikes on 2026-11-11 (M-series Mac, files in the PR evidence):
 
 ### 5. No feedback loop
 1. Speaker source: `SpeakerCapture` starts audiotee with `--exclude-processes <backend pid>`.
-2. Mic source: while a sound plays, and for 0.8 s after it ends, the orchestrator treats playback like speaker voice, so mic segments are gated (trace reason `tts_playback`). The gate stops the laptop speakers' echo into the mic. It also stops Speak my speech from speaking its own output again.
+2. Mic source: the orchestrator drops a mic segment whose time span overlaps a playback interval plus 0.8 s (trace reason `tts_playback`). It checks the segment span and not only the current time: the first real run leaked one echo line, because VAD makes a segment final only after 1.0 s of silence, which is later than the release window. The gate stops the laptop speakers' echo into the mic. It also stops Speak my speech from speaking its own output again.
 
 ### 6. Output device
 `tts_output_device` stores the device **name** (indexes change when devices connect). Empty = system default. At play time the name is resolved with `sd.query_devices()`. A missing device falls back to the default and logs a warning. A real run once failed with `PaErrorCode -9986` on every new output stream (the error that PR #9 fixed for the mic), and it did not happen again in 3 fresh runs. So, when opening the output fails and no mic stream is open, the player reloads PortAudio and retries once. When a mic stream is open, it does not reload (Pa_Terminate would close the mic), and the error tells the user to stop and start recording.

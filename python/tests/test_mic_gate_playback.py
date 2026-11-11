@@ -39,7 +39,8 @@ class RecordingTracer(NullTracer):
         self.events.append((event, fields))
 
 
-def run_loop(playback: bool):
+def run_loop(playback):
+    """playback: bool, or a probe(t0, t1) on monotonic time (orchestrator start = 0)."""
     chunk = SimpleNamespace(source="mic", samples=np.ones(512, dtype=np.float32) * 0.1)
     tracer = RecordingTracer()
     orch = PipelineOrchestrator(FakeStream([chunk]), FakeVAD(), asr=None, translator=None, tracer=tracer)
@@ -48,7 +49,7 @@ def run_loop(playback: bool):
     orch._speaker_voice_last = -100.0
     enqueued = []
     orch._enqueue_final = lambda trace_id, seg: enqueued.append(seg)
-    orch.set_playback_probe(lambda: playback)
+    orch.set_playback_probe(playback if callable(playback) else (lambda t0, t1: playback))
     asyncio.run(orch._vad_loop())
     return enqueued, tracer.events
 
@@ -64,3 +65,14 @@ def test_mic_segment_kept_when_app_is_silent():
     enqueued, events = run_loop(playback=False)
     assert len(enqueued) == 1
     assert not [e for e, _ in events if e == "mic_gated"]
+
+
+def test_segment_spoken_during_playback_but_final_later_is_dropped():
+    # The segment spans t=0..1 s; the app played audio at t=0.5..0.6 s. "Now" is far later
+    # (the VAD emits the segment only after silence), so only the span check can catch it.
+    def probe(t0, t1):
+        return t0 <= 0.6 and 0.5 <= t1
+
+    enqueued, events = run_loop(probe)
+    assert enqueued == []
+    assert [f["reason"] for e, f in events if e == "mic_gated"] == ["tts_playback"]

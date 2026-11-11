@@ -16,7 +16,7 @@ import subprocess
 import tempfile
 import threading
 import time
-from collections import OrderedDict
+from collections import OrderedDict, deque
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional, Protocol
@@ -344,7 +344,8 @@ class SpeechService:
         self._stop = threading.Event()
         self._cache: OrderedDict[int, Utterance] = OrderedDict()
         self._playing = False
-        self._played_until = 0.0
+        self._play_started = 0.0
+        self._intervals: deque[tuple[float, float]] = deque(maxlen=50)  # (start, end) monotonic
         self.current: Optional[Utterance] = None
         self.downloading = False
         self.download_error = ""
@@ -400,8 +401,17 @@ class SpeechService:
 
     # --- status ---
 
+    def playback_overlaps(self, t0: float, t1: Optional[float] = None) -> bool:
+        """True if [t0, t1] (time.monotonic) overlaps a playback, extended by the
+        release window. A mic segment is final only after ~1 s of silence, so the
+        orchestrator checks the segment's own time span, not only "now"."""
+        t1 = t0 if t1 is None else t1
+        if self._playing and t1 >= self._play_started:
+            return True
+        return any(s <= t1 and t0 <= e + PLAYBACK_RELEASE_S for s, e in self._intervals)
+
     def playback_active(self) -> bool:
-        return self._playing or (time.monotonic() - self._played_until) < PLAYBACK_RELEASE_S
+        return self.playback_overlaps(time.monotonic())
 
     def status(self) -> dict:
         model = self.cfg.tts_qwen_model
@@ -516,12 +526,13 @@ class SpeechService:
                     continue
                 u.status = "playing"
                 self._emit(u)
+                self._play_started = time.monotonic()
                 self._playing = True
                 try:
                     await asyncio.to_thread(self._player.play, u.audio, u.sample_rate, self.cfg.tts_output_device, self._stop)
                 finally:
                     self._playing = False
-                    self._played_until = time.monotonic()
+                    self._intervals.append((self._play_started, time.monotonic()))
                 u.status = "stopped" if self._stop.is_set() else "done"
                 self._emit(u)
             except Exception as e:

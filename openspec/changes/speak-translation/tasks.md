@@ -24,6 +24,8 @@
 
 - [x] 3.8 On a PortAudio error when the output opens, reload PortAudio and retry once if no mic stream is open; test
 
+- [x] 3.9 Gate mic segments by their time span against recorded playback intervals (a real run leaked one echo line with the "now" check); regression test
+
 ## 4. UI (Electron)
 
 - [x] 4.1 Handle `speak` events in `useTranscript.ts` (utterance list by id)
