@@ -62,7 +62,7 @@ Spikes on 2026-11-11 (M-series Mac, files in the PR evidence):
 
 ## Risks / Trade-offs
 
-- [The first Qwen3-TTS load takes about 39 s] → Load starts at once when the user selects the engine (warm-up). The status shows "Loading voice model…"; speak requests wait in the queue.
+- [The first Qwen3-TTS load takes about 39 s (later loads 3–5 s in real runs)] → Load starts at once when the user selects the engine and at backend start (warm-up). Settings shows "loads on first use" or "loaded"; a speak request waits in "synthesizing" until the model is ready.
 - [Qwen3-TTS mispronounces languages that it does not list] → Fallback to the macOS voice is on by default. The Settings shows the supported list.
 - [audiotee exclusion does not work on some macOS version] → The mic gate still blocks the echo loop. The real test checks `/api/transcript` while TTS plays.
 - [Echo into the mic after playback] → A release window of 0.8 s.
