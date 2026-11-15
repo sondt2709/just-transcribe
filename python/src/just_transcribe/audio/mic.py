@@ -42,16 +42,7 @@ class MicCapture:
         if self._loop is not None:
             self._loop.call_soon_threadsafe(self._queue.put_nowait, audio)
 
-    @staticmethod
-    def _reload_portaudio() -> None:
-        """Make PortAudio read the current device list (a device may have changed,
-        e.g. a Bluetooth headset reconnected). See audio/portaudio.py."""
-        portaudio.reload(sd)
-
-    async def start(self) -> None:
-        self._loop = asyncio.get_running_loop()
-        if self._stream is None:
-            self._reload_portaudio()
+    def _open_stream(self) -> None:
         self._stream = sd.InputStream(
             samplerate=self.sample_rate,
             channels=1,
@@ -60,6 +51,16 @@ class MicCapture:
             callback=self._audio_callback,
         )
         self._stream.start()
+
+    async def start(self) -> None:
+        self._loop = asyncio.get_running_loop()
+        if self._stream is None:
+            # Reload PortAudio so it sees the current devices (a Bluetooth headset
+            # may have reconnected), and open the mic before the call mic bridge
+            # reopens its streams (see audio/portaudio.py).
+            portaudio.reload(sd, then=self._open_stream)
+        else:
+            self._open_stream()
         logger.info("Mic capture started (rate=%d)", self.sample_rate)
 
     async def stop(self) -> None:

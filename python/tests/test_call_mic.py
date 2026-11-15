@@ -251,3 +251,16 @@ def test_resample_to_48k_mono():
     assert y.ndim == 1 and abs(len(y) - RATE) <= 1
     spec = np.abs(np.fft.rfft(y))
     assert abs(np.argmax(spec) * RATE / len(y) - 440) < 2
+
+
+def test_reload_opens_the_callers_stream_before_the_bridge_reopens(bridge_factory):
+    """A mic stream opened after the bridge's breaks it (AUHAL -50): the ASR mic must open first."""
+    sd = FakeSD([MAC_MIC, SPEAKERS, VIRTUAL])
+    b = bridge_factory(sd)
+    b.apply(True, "voice_and_translation")
+    before = len(sd.opened)
+    portaudio.reload(sd, then=lambda: sd.InputStream(samplerate=16000, blocksize=1600))
+    kinds = [(s.kind, s.kw.get("samplerate")) for s in sd.opened[before:]]
+    assert kinds[0] == ("in", 16000)  # the caller's (ASR) mic first
+    assert ("in", RATE) in kinds[1:] and ("out", RATE) in kinds[1:]
+    assert b.state == "running"

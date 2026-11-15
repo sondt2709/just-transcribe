@@ -4,14 +4,14 @@ PortAudio reads the device list once, at initialization; after a device change a
 stream opened with the old list fails (-9986). Reloading (Pa_Terminate +
 Pa_Initialize) closes every open stream, so holders of long-lived streams (the
 call mic bridge) register here: they close their streams before the reload and
-reopen them after.
+reopen them after the caller's own stream is open.
 """
 
 from __future__ import annotations
 
 import logging
 import threading
-from typing import Protocol
+from typing import Callable, Optional, Protocol
 
 import sounddevice as sd
 
@@ -41,20 +41,30 @@ def unregister(holder: StreamHolder) -> None:
             _holders.remove(holder)
 
 
-def reload(sd_module=sd) -> None:
-    try:
-        terminate, initialize = sd_module._terminate, sd_module._initialize
-    except AttributeError:
-        logger.warning("Cannot reload PortAudio: sounddevice has no _terminate/_initialize")
-        return
+def reload(sd_module=sd, then: Optional[Callable[[], None]] = None) -> None:
+    """Reload PortAudio, then run `then` (open the caller's stream), then reopen
+    the holders' streams.
+
+    The order matters: a mic stream opened later with another buffer size breaks
+    an earlier stream on the same device (AUHAL error -50; the earlier stream
+    stops). The ASR mic uses 100 ms blocks, the call mic bridge 10 ms blocks, so
+    the bridge must open after the ASR mic.
+    """
+    terminate = getattr(sd_module, "_terminate", None)
+    initialize = getattr(sd_module, "_initialize", None)
     with lock:
         suspended = [h for h in list(_holders) if h.suspend()]
         try:
-            try:
-                terminate()
-            except sd_module.PortAudioError as e:
-                logger.warning("PortAudio terminate failed: %s", e)
-            initialize()
+            if terminate is None or initialize is None:
+                logger.warning("Cannot reload PortAudio: sounddevice has no _terminate/_initialize")
+            else:
+                try:
+                    terminate()
+                except sd_module.PortAudioError as e:
+                    logger.warning("PortAudio terminate failed: %s", e)
+                initialize()
+            if then is not None:
+                then()
         finally:
             for h in suspended:
                 try:
