@@ -63,12 +63,19 @@ jobs:
           cd electron
           npm version "${{ steps.version.outputs.next }}" --no-git-tag-version
 
+      - name: Build call microphone driver
+        if: steps.version.outputs.next != ''
+        run: scripts/build-driver.sh
+
       - name: Build and package
         if: steps.version.outputs.next != ''
         run: |
           cd electron
           npm run build
           npx electron-builder --mac --publish never
+          DRIVER="dist/mac-arm64/Just Transcribe.app/Contents/Resources/driver/JustTranscribeMic.driver"
+          test -f "$DRIVER/Contents/Info.plist"
+          codesign --verify --verbose "$DRIVER"
 
       - name: Publish release
         if: steps.version.outputs.next != ''

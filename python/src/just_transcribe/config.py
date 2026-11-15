@@ -26,6 +26,9 @@ DEFAULT_SAMPLE_RATE = 16000
 DEFAULT_TTS_QWEN_MODEL = "mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit"
 TTS_ENGINES = ("system", "qwen_local", "qwen_remote")
 
+# Call microphone (virtual device "Just Transcribe Microphone")
+CALL_MIC_MODES = ("voice_and_translation", "translation_only")
+
 # VAD defaults
 VAD_THRESHOLD = 0.5
 VAD_NEG_THRESHOLD = 0.15
@@ -69,6 +72,8 @@ class AppConfig:
     tts_output_device: str = ""  # output device name; empty = system default
     tts_fallback_system: bool = True  # macOS voice for languages Qwen3-TTS does not list
     tts_speak_mic: bool = False  # translate + speak each final "You" segment
+    call_mic_enabled: bool = False  # write to "Just Transcribe Microphone" while the backend runs
+    call_mic_mode: str = "voice_and_translation"  # or "translation_only"
 
     def to_dict(self) -> dict:
         return {
@@ -104,6 +109,8 @@ class AppConfig:
             "tts_output_device": self.tts_output_device,
             "tts_fallback_system": self.tts_fallback_system,
             "tts_speak_mic": self.tts_speak_mic,
+            "call_mic_enabled": self.call_mic_enabled,
+            "call_mic_mode": self.call_mic_mode,
         }
 
     @classmethod
@@ -141,6 +148,8 @@ class AppConfig:
             tts_output_device=str(data.get("tts_output_device", "")),
             tts_fallback_system=bool(data.get("tts_fallback_system", True)),
             tts_speak_mic=bool(data.get("tts_speak_mic", False)),
+            call_mic_enabled=bool(data.get("call_mic_enabled", False)),
+            call_mic_mode=data.get("call_mic_mode") if data.get("call_mic_mode") in CALL_MIC_MODES else CALL_MIC_MODES[0],
         )
 
 

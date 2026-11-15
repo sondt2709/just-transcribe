@@ -57,6 +57,10 @@
           "from": "resources",
           "to": ".",
           "filter": ["tray*.png"]
+        },
+        {
+          "from": "resources/driver",
+          "to": "driver"
         }
       ]
     }

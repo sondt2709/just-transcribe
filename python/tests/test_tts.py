@@ -374,3 +374,32 @@ def test_failed_voice_list_is_not_cached():
     eng = SystemEngine("", runner=runner)
     assert eng.voice_for("vi") is None
     assert eng.voice_for("vi") == "Linh"
+
+
+class FakeSink:
+    def __init__(self):
+        self.pushed: list[tuple[int, int]] = []
+        self.cleared = 0
+
+    def push_tts(self, audio, sr):
+        self.pushed.append((len(audio), sr))
+
+    def clear_tts(self):
+        self.cleared += 1
+
+
+def test_played_audio_also_goes_to_the_call_and_stop_clears_it():
+    async def run():
+        svc, events, synth, player = make(play_s=0.5)
+        svc.call_sink = sink = FakeSink()
+        a = await svc.speak("one", translate=False)
+        await asyncio.sleep(0.2)
+        pushed_while_playing = list(sink.pushed)
+        svc.stop()
+        await asyncio.sleep(0.1)
+        return a, sink, pushed_while_playing, player
+
+    a, sink, pushed, player = asyncio.run(run())
+    assert pushed == [(100, 16000)]  # FakeEngine: 100 samples at 16 kHz, same as the local player
+    assert player.played == [(100, "")]
+    assert sink.cleared == 1

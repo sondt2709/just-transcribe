@@ -15,6 +15,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
+from just_transcribe.audio.call_mic import CallMicBridge
 from just_transcribe.audio.stream import AudioStreamManager
 from just_transcribe.config import SESSIONS_DIR, AppConfig, load_config, save_config
 from just_transcribe.pipeline.asr import ASREngine, ASRProvider, TranscriptSegment
@@ -44,6 +45,7 @@ class AppState:
         self.translator: Optional[TranslationService] = None
         self.summarizer: Optional[SummaryService] = None
         self.speech: Optional[SpeechService] = None
+        self.callmic: Optional[CallMicBridge] = None
         self.stream_manager: Optional[AudioStreamManager] = None
         self.orchestrator: Optional[PipelineOrchestrator] = None
         self.tracer = NullTracer()
@@ -128,6 +130,15 @@ def create_app(
         )
         state.speech.warm_up()
 
+        # PortAudio may be reloaded (to see a newly installed driver) only when no
+        # other stream would be closed by it: the ASR mic or a playback.
+        state.callmic = CallMicBridge(
+            can_reload=lambda: not (state.stream_manager and state.stream_manager.mic_active)
+            and not state.speech.playback_active()
+        )
+        state.speech.call_sink = state.callmic
+        await asyncio.to_thread(state.callmic.apply, config.call_mic_enabled, config.call_mic_mode)
+
         logger.info("Models loaded, server ready")
         print("READY", flush=True)  # Signal to Electron
 
@@ -142,6 +153,8 @@ def create_app(
             await state.summarizer.close()
         if state.speech:
             await state.speech.close()
+        if state.callmic:
+            state.callmic.close()
 
     app = FastAPI(title="just-transcribe", lifespan=lifespan)
     app.state.app_state = state  # exposed for tests
@@ -301,6 +314,8 @@ def create_app(
         if state.speech:
             state.speech.configure(state.config)
             state.speech.warm_up()
+        if state.callmic:
+            await asyncio.to_thread(state.callmic.apply, state.config.call_mic_enabled, state.config.call_mic_mode)
 
         return {"status": "ok"}
 
@@ -408,6 +423,16 @@ def create_app(
         return {"status": "started" if started else "already_downloading"}
 
     # --- Trace sessions (read-only) ---
+
+    @app.get("/api/callmic/status")
+    async def callmic_status():
+        return state.callmic.status()
+
+    @app.post("/api/callmic/restart")
+    async def callmic_restart():
+        """Try again after the driver was installed or updated (Core Audio restarted)."""
+        await asyncio.to_thread(state.callmic.restart)
+        return state.callmic.status()
 
     @app.get("/api/sessions")
     async def list_sessions():

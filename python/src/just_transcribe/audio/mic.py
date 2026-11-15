@@ -9,6 +9,7 @@ from typing import Optional
 import numpy as np
 import sounddevice as sd
 
+from just_transcribe.audio import portaudio
 from just_transcribe.config import DEFAULT_SAMPLE_RATE
 
 logger = logging.getLogger(__name__)
@@ -43,25 +44,9 @@ class MicCapture:
 
     @staticmethod
     def _reload_portaudio() -> None:
-        """Make PortAudio read the current device list.
-
-        PortAudio reads the device list one time, at initialization. After a
-        device change (for example, a Bluetooth headset reconnects), a stream
-        opened with the old list fails with PaErrorCode -9986. sounddevice has
-        no public function for this, so use its private terminate/initialize.
-        Pa_Terminate closes all open streams: call this only when no mic
-        stream is open. The mic is the only PortAudio stream in the backend.
-        """
-        try:
-            terminate, initialize = sd._terminate, sd._initialize
-        except AttributeError:
-            logger.warning("Cannot reload PortAudio: sounddevice has no _terminate/_initialize")
-            return
-        try:
-            terminate()
-        except sd.PortAudioError as e:
-            logger.warning("PortAudio terminate failed: %s", e)
-        initialize()
+        """Make PortAudio read the current device list (a device may have changed,
+        e.g. a Bluetooth headset reconnected). See audio/portaudio.py."""
+        portaudio.reload(sd)
 
     async def start(self) -> None:
         self._loop = asyncio.get_running_loop()

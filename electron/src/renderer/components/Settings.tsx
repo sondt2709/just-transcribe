@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { TraceViewer } from './TraceViewer'
 import { SPEAK_LANGUAGES, ENGINE_LABELS } from '../lib/speak'
+import { CallMicSettings, type CallMicMode } from './CallMic'
 
 // Keep in sync with DEFAULT_TEMPLATE in python/src/just_transcribe/pipeline/summarize.py
 const DEFAULT_SUMMARY_PROMPT = `Summarize the following conversation for me.
@@ -52,6 +53,8 @@ interface Config {
   tts_output_device: string
   tts_fallback_system: boolean
   tts_speak_mic: boolean
+  call_mic_enabled: boolean
+  call_mic_mode: CallMicMode
 }
 
 interface TtsStatus {
@@ -116,7 +119,9 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
     tts_remote_model: '',
     tts_output_device: '',
     tts_fallback_system: true,
-    tts_speak_mic: false
+    tts_speak_mic: false,
+    call_mic_enabled: false,
+    call_mic_mode: 'voice_and_translation'
   })
   const [ttsStatus, setTtsStatus] = useState<TtsStatus | null>(null)
   const [voices, setVoices] = useState<{ name: string; locale: string }[]>([])
@@ -982,7 +987,7 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
                 </>
               )}
 
-              <Field label="Output device" hint="To send the voice into a call, select a virtual device (e.g. BlackHole) and use it as the call's microphone">
+              <Field label="Output device" hint="Where you hear the spoken translation. To send it into a call, use Call microphone below">
                 <select
                   value={config.tts_output_device}
                   onChange={(e) => setConfig({ ...config, tts_output_device: e.target.value })}
@@ -996,6 +1001,16 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
                     <option key={d} value={d}>{d}</option>
                   ))}
                 </select>
+              </Field>
+
+              <Field label="Call microphone" hint="Lets others in a call hear the spoken translation">
+                <CallMicSettings
+                  port={port}
+                  enabled={config.call_mic_enabled}
+                  mode={config.call_mic_mode}
+                  speakMic={config.tts_speak_mic}
+                  onChange={(patch) => setConfig({ ...config, ...patch })}
+                />
               </Field>
             </div>
           </Section>
@@ -1078,6 +1093,7 @@ export function Settings({ port, recording, onClose }: SettingsProps): JSX.Eleme
                   <UninstallItem label="Remove app data" command="rm -rf ~/.just-transcribe ~/Library/Application\ Support/just-transcribe" />
                   <UninstallItem label="Remove ASR model (~3.5 GB)" command="rm -rf ~/.cache/huggingface/hub/models--Qwen--Qwen3-ASR-1.7B" />
                   <UninstallItem label="Remove voice model (~2 GB)" command="rm -rf ~/.cache/huggingface/hub/models--mlx-community--Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit" />
+                  <UninstallItem label="Remove call microphone (sound stops ~2 s)" command="sudo rm -rf /Library/Audio/Plug-Ins/HAL/JustTranscribeMic.driver && sudo killall coreaudiod" />
                   <p className="text-xs text-neutral-600 mt-1">
                     Run in Terminal to remove each component.
                   </p>

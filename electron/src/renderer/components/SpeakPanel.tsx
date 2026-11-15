@@ -9,6 +9,7 @@ import {
   speakText,
   stopSpeaking
 } from '../lib/speak'
+import { bridgeLine, useCallMicStatus } from './CallMic'
 
 interface SpeakPanelProps {
   port: number | null
@@ -67,6 +68,7 @@ export function SpeakPanel({ port, utterances, configVersion, onOpenSettings }: 
   const [translateFirst, setTranslateFirst] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState<number | null>(null)
+  const [callMic, refreshCallMic] = useCallMicStatus(port, 3000)
 
   const refresh = (): void => {
     if (!port) return
@@ -82,6 +84,7 @@ export function SpeakPanel({ port, utterances, configVersion, onOpenSettings }: 
 
   const finished = utterances.filter((u) => u.status === 'done' || u.status === 'error').length
   useEffect(refresh, [port, configVersion, open, finished])
+  useEffect(refreshCallMic, [configVersion, refreshCallMic])
 
   const toggle = (): void => {
     setOpen((o) => {
@@ -143,6 +146,35 @@ export function SpeakPanel({ port, utterances, configVersion, onOpenSettings }: 
         {busy && <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse" />}
         {!open && cfg.tts_speak_mic && <span className="text-[10px] text-teal-500">· speaking my lines</span>}
       </button>
+
+      {/* Call microphone: one line while "Send to call" is on */}
+      {(() => {
+        const line = bridgeLine(callMic)
+        if (!line) return null
+        return (
+          <div className="mb-2">
+            <button
+              onClick={onOpenSettings}
+              className={`w-full text-left text-[11px] truncate ${line.tone === 'ok' ? 'text-teal-400' : 'text-amber-400'}`}
+              title={line.text}
+            >
+              {line.tone === 'ok' && <span className="inline-block w-1.5 h-1.5 rounded-full bg-teal-400 mr-1.5 align-middle" />}
+              {line.text}
+            </button>
+            {callMic?.state === 'running' && callMic.mode === 'voice_and_translation' && cfg.tts_speak_mic && (
+              <p className="text-[11px] text-amber-400/80 leading-snug mt-0.5">
+                Others hear your voice, then its translation.{' '}
+                <button
+                  onClick={() => port && patchConfig(port, { call_mic_mode: 'translation_only' }).then(refreshCallMic)}
+                  className="underline hover:text-amber-300"
+                >
+                  Send translation only
+                </button>
+              </p>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Now playing stays visible when the section is closed */}
       {busy && (

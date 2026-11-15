@@ -23,6 +23,7 @@ from typing import Callable, Optional, Protocol
 
 import numpy as np
 
+from just_transcribe.audio import portaudio
 from just_transcribe.config import DEFAULT_TTS_QWEN_MODEL, AppConfig
 
 logger = logging.getLogger(__name__)
@@ -246,8 +247,7 @@ class SoundDevicePlayer:
                     f"{e}. The audio devices changed: stop and start recording, then try again."
                 ) from e
             logger.warning("Output stream failed (%s); reloading PortAudio and retrying", e)
-            sd._terminate()
-            sd._initialize()
+            portaudio.reload(sd)
             self._play(sd, audio, sr, device_name, stop)
 
     @staticmethod
@@ -332,8 +332,10 @@ class SpeechService:
         player=None,
         engine_factory: Optional[Callable[[str, AppConfig], Engine]] = None,
         downloader: Optional[Callable[[str], object]] = None,
+        call_sink=None,
     ):
         self._translator = translator
+        self.call_sink = call_sink  # CallMicBridge: the same audio also goes to the call
         self._on_event = on_event
         self._player = player or SoundDevicePlayer()
         self._engine_factory = engine_factory or self._default_engine
@@ -506,6 +508,8 @@ class SpeechService:
 
     def stop(self) -> None:
         self._stop.set()
+        if self.call_sink is not None:
+            self.call_sink.clear_tts()
         if self._queue is not None:
             while not self._queue.empty():
                 u = self._queue.get_nowait()
@@ -528,6 +532,8 @@ class SpeechService:
                 self._emit(u)
                 self._play_started = time.monotonic()
                 self._playing = True
+                if self.call_sink is not None:
+                    self.call_sink.push_tts(u.audio, u.sample_rate)
                 try:
                     await asyncio.to_thread(self._player.play, u.audio, u.sample_rate, self.cfg.tts_output_device, self._stop)
                 finally:
