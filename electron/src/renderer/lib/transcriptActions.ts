@@ -1,46 +1,19 @@
-interface HistorySegment {
-  id: number
-  text: string
-  source: string
-  speaker: string
-  lang: string
-  start: number
-  end: number
-  wall_start: number
-  translations: Record<string, string>
-}
+import {
+  defaultFileName,
+  formatSummaryMarkdown,
+  formatSummaryText,
+  formatTranscriptMarkdown,
+  formatTranscriptText,
+  type HistorySegment,
+  type Summary
+} from './exportFormat'
 
-function formatWallTime(epochSeconds: number): string {
-  const d = new Date(epochSeconds * 1000)
-  const pad = (n: number): string => n.toString().padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
-}
+export { formatTranscriptText }
 
-function orderedLangs(translations: Record<string, string>, targetOrder: string[]): string[] {
-  const langs = Object.keys(translations)
-  const inOrder = targetOrder.filter((l) => langs.includes(l))
-  const rest = langs.filter((l) => !targetOrder.includes(l))
-  return [...inOrder, ...rest]
-}
-
-export function formatTranscriptText(segments: HistorySegment[], targetOrder: string[]): string {
-  return segments
-    .map((seg) => {
-      const lines = [`[${formatWallTime(seg.wall_start)}] ${seg.speaker} (${seg.lang}): ${seg.text}`]
-      for (const lang of orderedLangs(seg.translations, targetOrder)) {
-        lines.push(`    ${lang}: ${seg.translations[lang]}`)
-      }
-      return lines.join('\n')
-    })
-    .join('\n')
-}
-
-/** Copy the full backend transcript history to the clipboard. Returns false if empty. */
-export async function copyTranscript(port: number): Promise<boolean> {
+async function fetchHistory(port: number): Promise<{ segments: HistorySegment[]; targetOrder: string[] }> {
   const res = await fetch(`http://127.0.0.1:${port}/api/transcript`)
   if (!res.ok) throw new Error(`Failed to fetch transcript: ${res.status}`)
   const { segments } = (await res.json()) as { segments: HistorySegment[] }
-  if (!segments.length) return false
 
   let targetOrder: string[] = []
   try {
@@ -52,9 +25,38 @@ export async function copyTranscript(port: number): Promise<boolean> {
   } catch {
     // fall back to insertion order
   }
+  return { segments, targetOrder }
+}
 
+/** Copy the full backend transcript history to the clipboard. Returns false if empty. */
+export async function copyTranscript(port: number): Promise<boolean> {
+  const { segments, targetOrder } = await fetchHistory(port)
+  if (!segments.length) return false
   await navigator.clipboard.writeText(formatTranscriptText(segments, targetOrder))
   return true
+}
+
+/** Save the full transcript (original + translations) through the Save dialog. */
+export async function exportTranscript(port: number): Promise<{ saved: boolean; path?: string }> {
+  const { segments, targetOrder } = await fetchHistory(port)
+  if (!segments.length) return { saved: false }
+  return window.api.saveTextFile({
+    defaultName: defaultFileName('transcript'),
+    markdown: formatTranscriptMarkdown(segments, targetOrder),
+    text: formatTranscriptText(segments, targetOrder)
+  })
+}
+
+/** Save the summary through the Save dialog. */
+export async function exportSummary(
+  summary: Summary,
+  updatedAt: number | null
+): Promise<{ saved: boolean; path?: string }> {
+  return window.api.saveTextFile({
+    defaultName: defaultFileName('summary'),
+    markdown: formatSummaryMarkdown(summary, updatedAt),
+    text: formatSummaryText(summary, updatedAt)
+  })
 }
 
 /** Clear backend transcript history; all windows reset via the broadcast "clear" event. */

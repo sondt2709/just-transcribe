@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import type { Summary } from '../lib/exportFormat'
 
 export interface Segment {
   id: number
@@ -22,12 +23,30 @@ export interface PipelineAlert {
   message: string
 }
 
+export interface SummaryState {
+  status: 'idle' | 'running' | 'ok' | 'error'
+  summary: Summary | null
+  updated_at: number | null
+  error: string
+  covered_segment_id: number | null
+}
+
+const IDLE_SUMMARY: SummaryState = {
+  status: 'idle',
+  summary: null,
+  updated_at: null,
+  error: '',
+  covered_segment_id: null
+}
+
 interface UseTranscriptReturn {
   segments: Segment[]
   interim: InterimState | null
   connected: boolean
   alert: PipelineAlert | null
   dismissAlert: () => void
+  summary: SummaryState
+  summaryContext: string
 }
 
 export function useTranscript(port: number | null): UseTranscriptReturn {
@@ -35,6 +54,8 @@ export function useTranscript(port: number | null): UseTranscriptReturn {
   const [interim, setInterim] = useState<InterimState | null>(null)
   const [connected, setConnected] = useState(false)
   const [alert, setAlert] = useState<PipelineAlert | null>(null)
+  const [summary, setSummary] = useState<SummaryState>(IDLE_SUMMARY)
+  const [summaryContext, setSummaryContext] = useState('')
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -47,6 +68,15 @@ export function useTranscript(port: number | null): UseTranscriptReturn {
     ws.onopen = () => {
       setConnected(true)
       console.log('WebSocket connected')
+      // Restore the backend summary + session context (e.g., after a reconnect)
+      fetch(`http://127.0.0.1:${port}/api/summary`)
+        .then((r) => r.json())
+        .then((data) => {
+          const { context, ...rest } = data
+          setSummary({ ...IDLE_SUMMARY, ...rest })
+          setSummaryContext(context ?? '')
+        })
+        .catch(() => {})
     }
 
     ws.onclose = () => {
@@ -109,6 +139,12 @@ export function useTranscript(port: number | null): UseTranscriptReturn {
             setAlert({ kind: 'error', message: data.message })
             break
 
+          case 'summary': {
+            const { type: _type, ...rest } = data
+            setSummary({ ...IDLE_SUMMARY, ...rest })
+            break
+          }
+
           case 'stall':
             console.warn('Pipeline stall:', data.message)
             setAlert({ kind: 'stall', message: data.message })
@@ -130,5 +166,5 @@ export function useTranscript(port: number | null): UseTranscriptReturn {
 
   const dismissAlert = useCallback(() => setAlert(null), [])
 
-  return { segments, interim, connected, alert, dismissAlert }
+  return { segments, interim, connected, alert, dismissAlert, summary, summaryContext }
 }
