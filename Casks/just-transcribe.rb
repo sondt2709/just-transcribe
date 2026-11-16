@@ -17,14 +17,28 @@ cask "just-transcribe" do
                    sudo: false
   end
 
-  zap trash: [
-    "~/.just-transcribe",
-    "~/Library/Application Support/just-transcribe",
-  ]
+  # Not `uninstall`: `brew upgrade` runs the old version's uninstall stanza, which
+  # would remove the driver and restart Core Audio on every upgrade.
+  zap script: {
+        executable: "/bin/sh",
+        args:       [
+          "-c",
+          "if [ -e /Library/Audio/Plug-Ins/HAL/JustTranscribeMic.driver ]; then " \
+          "rm -rf /Library/Audio/Plug-Ins/HAL/JustTranscribeMic.driver && killall coreaudiod; fi",
+        ],
+        sudo:       true,
+      },
+      trash:  [
+        "~/.just-transcribe",
+        "~/Library/Application Support/just-transcribe",
+      ]
 
   caveats <<~EOS
     App is unsigned; quarantine is cleared automatically on install.
     If macOS still blocks the app, run:
       xattr -cr "/Applications/Just Transcribe.app"
+
+    If you installed the call microphone ("Just Transcribe Microphone"),
+    remove it with: brew uninstall --zap just-transcribe
   EOS
 end

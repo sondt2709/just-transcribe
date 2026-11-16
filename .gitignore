@@ -38,3 +38,7 @@ kmp/release.keystore
 
 # Lock files (platform-specific)
 uv.lock
+
+# Call microphone driver build
+driver/build/
+electron/resources/driver/

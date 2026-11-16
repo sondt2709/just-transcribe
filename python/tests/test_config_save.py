@@ -20,3 +20,13 @@ def test_save_creates_file(tmp_path):
     path = tmp_path / "config.toml"
     save_config(AppConfig(), path=path)
     assert 'tts_engine = "system"' in path.read_text()
+
+
+def test_call_mic_defaults_and_invalid_mode():
+    from just_transcribe.config import AppConfig
+
+    old = AppConfig.from_dict({})
+    assert old.call_mic_enabled is False and old.call_mic_mode == "voice_and_translation"
+    assert AppConfig.from_dict({"call_mic_mode": "loud"}).call_mic_mode == "voice_and_translation"
+    cfg = AppConfig.from_dict({"call_mic_enabled": True, "call_mic_mode": "translation_only"})
+    assert cfg.to_dict()["call_mic_enabled"] is True and cfg.to_dict()["call_mic_mode"] == "translation_only"

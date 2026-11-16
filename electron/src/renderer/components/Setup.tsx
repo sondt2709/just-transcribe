@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { CALL_MIC_NAME, DriverControl } from './CallMic'
 
 interface SetupProps {
   onComplete: () => void
@@ -203,6 +204,19 @@ export function Setup({ onComplete }: SetupProps): JSX.Element {
                 <CommandBlock command="hf download mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit" />
               </div>
             )}
+          </div>
+        )}
+
+        {/* Optional: call microphone driver (never blocks setup) */}
+        {providerChosen && (
+          <div className="mb-4 rounded-lg border border-dashed border-neutral-700 px-4 py-3">
+            <span className="text-sm text-neutral-300">Optional: Call microphone</span>
+            <p className="text-xs text-neutral-500 mt-1 mb-2">
+              Adds “{CALL_MIC_NAME}”, a microphone for Meet, Zoom or Teams, so others in a call hear the spoken
+              translation. Installing asks for your administrator password, and all sound stops for about 2 seconds. You
+              can also install it later in Settings → Voice.
+            </p>
+            <DriverControl port={null} />
           </div>
         )}
 

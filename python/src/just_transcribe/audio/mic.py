@@ -9,6 +9,7 @@ from typing import Optional
 import numpy as np
 import sounddevice as sd
 
+from just_transcribe.audio import portaudio
 from just_transcribe.config import DEFAULT_SAMPLE_RATE
 
 logger = logging.getLogger(__name__)
@@ -41,32 +42,7 @@ class MicCapture:
         if self._loop is not None:
             self._loop.call_soon_threadsafe(self._queue.put_nowait, audio)
 
-    @staticmethod
-    def _reload_portaudio() -> None:
-        """Make PortAudio read the current device list.
-
-        PortAudio reads the device list one time, at initialization. After a
-        device change (for example, a Bluetooth headset reconnects), a stream
-        opened with the old list fails with PaErrorCode -9986. sounddevice has
-        no public function for this, so use its private terminate/initialize.
-        Pa_Terminate closes all open streams: call this only when no mic
-        stream is open. The mic is the only PortAudio stream in the backend.
-        """
-        try:
-            terminate, initialize = sd._terminate, sd._initialize
-        except AttributeError:
-            logger.warning("Cannot reload PortAudio: sounddevice has no _terminate/_initialize")
-            return
-        try:
-            terminate()
-        except sd.PortAudioError as e:
-            logger.warning("PortAudio terminate failed: %s", e)
-        initialize()
-
-    async def start(self) -> None:
-        self._loop = asyncio.get_running_loop()
-        if self._stream is None:
-            self._reload_portaudio()
+    def _open_stream(self) -> None:
         self._stream = sd.InputStream(
             samplerate=self.sample_rate,
             channels=1,
@@ -75,6 +51,16 @@ class MicCapture:
             callback=self._audio_callback,
         )
         self._stream.start()
+
+    async def start(self) -> None:
+        self._loop = asyncio.get_running_loop()
+        if self._stream is None:
+            # Reload PortAudio so it sees the current devices (a Bluetooth headset
+            # may have reconnected), and open the mic before the call mic bridge
+            # reopens its streams (see audio/portaudio.py).
+            portaudio.reload(sd, then=self._open_stream)
+        else:
+            self._open_stream()
         logger.info("Mic capture started (rate=%d)", self.sample_rate)
 
     async def stop(self) -> None:

@@ -1,5 +1,18 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
+export interface DriverStatus {
+  state: 'not_installed' | 'installed' | 'update_available' | 'unavailable'
+  installed: string | null
+  bundled: string | null
+}
+
+export interface DriverActionResult {
+  ok: boolean
+  cancelled?: boolean
+  error?: string
+  status: DriverStatus
+}
+
 export interface SetupStatus {
   uvInstalled: boolean
   hfInstalled: boolean
@@ -28,6 +41,11 @@ const api = {
     markdown: string
     text: string
   }): Promise<{ saved: boolean; path?: string }> => ipcRenderer.invoke('save-text-file', args),
+
+  // "Just Transcribe Microphone" driver
+  getDriverStatus: (): Promise<DriverStatus> => ipcRenderer.invoke('driver-status'),
+  installDriver: (): Promise<DriverActionResult> => ipcRenderer.invoke('driver-install'),
+  removeDriver: (): Promise<DriverActionResult> => ipcRenderer.invoke('driver-remove'),
 
   // Electron-only config
   getElectronConfig: (): Promise<{ overlay_position: string; overlay_enabled: boolean; overlay_click_through: boolean; launch_at_login: boolean }> =>

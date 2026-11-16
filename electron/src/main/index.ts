@@ -17,6 +17,7 @@ import {
   writeBackendVersion
 } from './setup'
 import { createTray, updateTrayState, destroyTray } from './tray'
+import { bundledDriverPath, getDriverStatus, installDriver, removeDriver } from './driver'
 import {
   resolveOverlayBounds,
   gridBoundsForOverlay,
@@ -418,6 +419,12 @@ app.whenReady().then(async () => {
       return { saved: true, path: result.filePath }
     }
   )
+
+  // "Just Transcribe Microphone" driver (renderer confirms before install/remove)
+  const driverPath = (): string => bundledDriverPath(getElectronRoot(), is.dev)
+  ipcMain.handle('driver-status', () => getDriverStatus(driverPath()))
+  ipcMain.handle('driver-install', () => installDriver(driverPath()))
+  ipcMain.handle('driver-remove', () => removeDriver(driverPath()))
 
   ipcMain.handle('get-electron-config', () => readElectronConfig())
 
