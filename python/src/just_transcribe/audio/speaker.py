@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import logging
 from pathlib import Path
 from typing import Optional
@@ -38,14 +39,23 @@ class SpeakerCapture:
             )
 
         self._process = await asyncio.create_subprocess_exec(
-            str(self.audiotee_path),
-            "--sample-rate",
-            str(self.sample_rate),
+            *self.command(),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
         self._reader_task = asyncio.create_task(self._read_loop())
         logger.info("Speaker capture started (audiotee pid=%d)", self._process.pid)
+
+    def command(self) -> list[str]:
+        """audiotee args. Our own PID is excluded so the app's spoken (TTS) audio
+        is never captured as system audio."""
+        return [
+            str(self.audiotee_path),
+            "--sample-rate",
+            str(self.sample_rate),
+            "--exclude-processes",
+            str(os.getpid()),
+        ]
 
     async def _read_loop(self) -> None:
         """Read PCM float32 data from audiotee stdout."""

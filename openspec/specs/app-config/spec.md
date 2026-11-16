@@ -16,13 +16,13 @@ The system SHALL use `~/.just-transcribe/` as the application home directory wit
 - **THEN** the Electron app copies the bundled audiotee binary from its resources to `~/.just-transcribe/bin/audiotee` and makes it executable
 
 ### Requirement: User configuration file
-The system SHALL store user preferences in `~/.just-transcribe/config.toml` with the following configurable fields: preferred language, secondary preferred language (optional), ASR provider ("local" or "remote"), ASR model name, ASR base URL (for remote provider), ASR API key (for remote provider), ASR language hint, ASR request timeout in seconds (`asr_timeout_s`, default 10), LLM API base URL, LLM model name, LLM API key, audio source preferences (mic enabled, speaker enabled), audio debug recording flag (`debug_audio`, default false), **summary trigger mode (`summary_mode`, "auto" or "manual", default "auto"), summary debounce in seconds (`summary_debounce_s`, default 10), summary max wait in seconds (`summary_max_wait_s`, default 60, 0 = off), minimum new segments for an automatic summary (`summary_min_segments`, default 2), summary window in seconds (`summary_window_s`, default 600), summary overlap in seconds (`summary_overlap_s`, default 60), and summary prompt template (`summary_prompt`, default "" = built-in template)**. The summary session context SHALL NOT be stored in `config.toml`.
+The system SHALL store user preferences in `~/.just-transcribe/config.toml` with the following configurable fields: preferred language, secondary preferred language (optional), ASR provider ("local" or "remote"), ASR model name, ASR base URL (for remote provider), ASR API key (for remote provider), ASR language hint, ASR request timeout in seconds (`asr_timeout_s`, default 10), LLM API base URL, LLM model name, LLM API key, audio source preferences (mic enabled, speaker enabled), audio debug recording flag (`debug_audio`, default false), **summary trigger mode (`summary_mode`, "auto" or "manual", default "auto"), summary debounce in seconds (`summary_debounce_s`, default 10), summary max wait in seconds (`summary_max_wait_s`, default 60, 0 = off), minimum new segments for an automatic summary (`summary_min_segments`, default 2), summary window in seconds (`summary_window_s`, default 600), summary overlap in seconds (`summary_overlap_s`, default 60), summary prompt template (`summary_prompt`, default "" = built-in template)**, **TTS engine (`tts_engine`: "system", "qwen_local" or "qwen_remote", default "system"), TTS target language (`tts_target_lang`, default "en"), macOS voice name (`tts_system_voice`, default "" = first voice for the language), Qwen3-TTS model (`tts_qwen_model`, default "mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit"), Qwen3-TTS voice (`tts_qwen_voice`, default "ryan"), remote TTS URL, API key and model (`tts_remote_url`, `tts_remote_api_key`, `tts_remote_model`, default ""), output device name (`tts_output_device`, default "" = system default), fallback to the macOS voice (`tts_fallback_system`, default true), and Speak my speech (`tts_speak_mic`, default false)**. The summary session context SHALL NOT be stored in `config.toml`.
 
 The frontend SHALL cache local and remote ASR configuration values independently in component state. When the user switches between local and remote providers, the previously entered values for each provider SHALL be preserved in memory. On save, only the active provider's values SHALL be written to the backend config.
 
 #### Scenario: Default configuration
 - **WHEN** `config.toml` does not exist
-- **THEN** the system uses defaults: preferred language "en", secondary preferred language "" (disabled), ASR provider "local", ASR model "Qwen/Qwen3-ASR-1.7B", empty ASR base URL, empty ASR API key, empty ASR language (auto-detect), `asr_timeout_s` 10, no LLM API configured, both mic and speaker enabled, `debug_audio` false, **`summary_mode` "auto", `summary_debounce_s` 10, `summary_max_wait_s` 60, `summary_min_segments` 2, `summary_window_s` 600, `summary_overlap_s` 60, `summary_prompt` ""**
+- **THEN** the system uses defaults: preferred language "en", secondary preferred language "" (disabled), ASR provider "local", ASR model "Qwen/Qwen3-ASR-1.7B", empty ASR base URL, empty ASR API key, empty ASR language (auto-detect), `asr_timeout_s` 10, no LLM API configured, both mic and speaker enabled, `debug_audio` false, **`summary_mode` "auto", `summary_debounce_s` 10, `summary_max_wait_s` 60, `summary_min_segments` 2, `summary_window_s` 600, `summary_overlap_s` 60, `summary_prompt` "", `tts_engine` "system", `tts_target_lang` "en", `tts_fallback_system` true, `tts_speak_mic` false**
 
 #### Scenario: Configuration persistence
 - **WHEN** the user changes settings via the UI (including secondary preferred language, ASR timeout, debug audio flag, **and the AI Summary settings**)
@@ -31,6 +31,14 @@ The frontend SHALL cache local and remote ASR configuration values independently
 #### Scenario: Old config without summary keys
 - **WHEN** `config.toml` was written by an older version and has no `summary_*` keys
 - **THEN** the system loads it without error and uses the summary defaults
+
+#### Scenario: Backend save keeps Electron keys
+- **WHEN** `config.toml` contains `overlay_enabled = true` and the backend saves the config (Settings → Save or a Speak tab toggle)
+- **THEN** `overlay_enabled`, `overlay_position`, `overlay_bounds`, `overlay_click_through` and `launch_at_login` keep their values
+
+#### Scenario: Old config without TTS keys
+- **WHEN** `config.toml` has no `tts_*` keys
+- **THEN** the system loads it without error, uses the macOS voice engine, and downloads nothing
 
 #### Scenario: Secondary language disabled
 - **WHEN** `preferred_language_2` is empty or not present in config.toml

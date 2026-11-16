@@ -63,6 +63,7 @@ export interface SetupStatus {
   pythonEnvReady: boolean
   audioteeReady: boolean
   modelsDownloaded: boolean
+  ttsModelDownloaded: boolean // optional Qwen3-TTS voice model; never affects `ready`
   asrProvider: string // "local" | "remote" | "" (not yet chosen)
   ready: boolean
 }
@@ -81,6 +82,20 @@ function modelCached(modelId: string): boolean {
   const dirName = `models--${modelId.replace('/', '--')}`
   const modelDir = path.join(HF_CACHE, dirName)
   return fs.existsSync(modelDir)
+}
+
+export const TTS_MODEL_ID = 'mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit'
+
+function modelWeightsCached(modelId: string): boolean {
+  // A finished snapshot has its safetensors weights; a bare folder may be a partial download
+  const snapshots = path.join(HF_CACHE, `models--${modelId.replace('/', '--')}`, 'snapshots')
+  try {
+    return fs
+      .readdirSync(snapshots)
+      .some((snap) => fs.readdirSync(path.join(snapshots, snap)).some((f) => f.endsWith('.safetensors')))
+  } catch {
+    return false
+  }
 }
 
 function readAsrProvider(): string {
@@ -187,6 +202,7 @@ export function checkSetupStatus(): SetupStatus {
   const pythonEnvReady = fs.existsSync(path.join(PYTHON_DIR, '.venv'))
   const audioteeReady = fs.existsSync(path.join(BIN_DIR, 'audiotee'))
   const modelsDownloaded = modelCached('Qwen/Qwen3-ASR-1.7B')
+  const ttsModelDownloaded = modelWeightsCached(TTS_MODEL_ID)
   const asrProvider = readAsrProvider()
 
   // Ready condition depends on provider choice
@@ -208,6 +224,7 @@ export function checkSetupStatus(): SetupStatus {
     pythonEnvReady,
     audioteeReady,
     modelsDownloaded,
+    ttsModelDownloaded,
     asrProvider,
     ready
   }

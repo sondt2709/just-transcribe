@@ -1,9 +1,7 @@
 ## Purpose
 
 Defines requirements for the first-launch setup experience, including provider choice, stepped prerequisite installation, and model download guidance.
-
 ## Requirements
-
 ### Requirement: Stepped setup flow
 The setup screen SHALL present a provider choice as the first step, then adapt subsequent steps based on the selection. For local: (1) choose provider, (2) install external tools (uv, optionally hf), (3) download model, (4) run setup. For remote: (1) choose provider, (2) install uv, (3) configure and test remote server, (4) run setup. Each step SHALL only become actionable when prior steps are complete.
 
@@ -56,3 +54,15 @@ The setup screen SHALL provide official install instructions for each prerequisi
 #### Scenario: hf not required for remote
 - **WHEN** the provider is remote
 - **THEN** the setup screen SHALL NOT show hf CLI as a prerequisite
+
+### Requirement: Optional Qwen3-TTS model step
+The setup screen SHALL show an optional step for the Qwen3-TTS voice model, with the command `hf download mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit` and the size (about 1.8 GB). The step SHALL say that the macOS voice works without it. The step SHALL NOT block "Run Setup" or the ready state, for local and remote providers.
+
+#### Scenario: Model not downloaded
+- **WHEN** the Qwen3-TTS model is not in the HuggingFace cache
+- **THEN** the setup screen shows the optional step with the download command, and "Run Setup" stays enabled when the required steps are complete
+
+#### Scenario: Model already downloaded
+- **WHEN** the model is in the HuggingFace cache
+- **THEN** the optional step shows as complete
+
