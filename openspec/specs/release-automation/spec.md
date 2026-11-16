@@ -1,7 +1,8 @@
 # release-automation Specification
 
+## Purpose
+Publish a versioned macOS release and Homebrew cask update automatically when a release-worthy commit lands on `main`.
 ## Requirements
-
 ### Requirement: Automatic versioned release on merge to main
 The system SHALL, on every push to `main` containing at least one release-worthy Conventional Commit (`fix:` → patch, `feat:` → minor, breaking change → major), compute the next semantic version from git history, build the macOS DMG, create a git tag `v<version>`, and publish a GitHub release with the DMG attached — with no manual steps.
 
@@ -41,3 +42,11 @@ The system SHALL serialize release workflow runs on `main` so overlapping merges
 #### Scenario: two merges in quick succession
 - **WHEN** two PRs merge to `main` within seconds of each other
 - **THEN** release runs execute one at a time, each computing its version from the state left by the previous run
+
+### Requirement: Release bundles the call microphone driver
+The release workflow SHALL build `JustTranscribeMic.driver` from `driver/` with libASPL at a pinned tag, sign it ad-hoc, and bundle it in the app at `Contents/Resources/driver/JustTranscribeMic.driver`. A driver build failure SHALL fail the release.
+
+#### Scenario: Driver in the DMG
+- **WHEN** a release is built
+- **THEN** `Just Transcribe.app/Contents/Resources/driver/JustTranscribeMic.driver/Contents/Info.plist` exists and `codesign -v` passes on the driver bundle
+

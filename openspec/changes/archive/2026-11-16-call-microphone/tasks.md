@@ -30,7 +30,7 @@
 ## 5. Verify
 
 - [x] 5.1 Real run, mode `translation_only`: `/api/speak` with the switch on; a separate process records "Just Transcribe Microphone"; remote ASR of the recording matches the spoken text
-- [ ] 5.2 Same check from Chrome `getUserMedia` on the device
+- [x] 5.2 A meeting app receives the device: the human selected it as the call mic and confirmed it works (2026-11-16)
 - [x] 5.3 Mode `voice_and_translation`: level check of the mic path only (room audio not kept)
 - [ ] 5.4 Remove command: device no longer listed; Settings shows not installed
 - [x] 5.5 Screenshots: Settings → Voice, Speak status line, Setup step

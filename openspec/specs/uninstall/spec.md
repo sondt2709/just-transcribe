@@ -1,9 +1,7 @@
 ## Purpose
 
 TBD — Defines requirements for providing users with clear uninstall instructions and independent component removal.
-
 ## Requirements
-
 ### Requirement: Uninstall instructions in Settings
 The Settings panel SHALL include an "Uninstall" section that lists commands to remove each component independently.
 
@@ -24,3 +22,11 @@ Each uninstall level SHALL be independent — removing app data SHALL NOT requir
 #### Scenario: Remove only model cache
 - **WHEN** the user removes `~/.cache/huggingface/hub/models--Qwen--Qwen3-ASR-1.7B`
 - **THEN** the app detects model is missing on next launch and shows the setup screen with model download instructions
+
+### Requirement: Remove the call microphone
+The Uninstall section SHALL list the command to remove the call microphone driver: `sudo rm -rf /Library/Audio/Plug-Ins/HAL/JustTranscribeMic.driver && sudo killall coreaudiod`. Removing it SHALL NOT require removing the app, the app data or the models.
+
+#### Scenario: Remove only the driver
+- **WHEN** the user runs the remove command
+- **THEN** "Just Transcribe Microphone" is no longer listed, the app still runs, and Settings shows the driver as not installed
+
