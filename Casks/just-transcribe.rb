@@ -1,6 +1,6 @@
 cask "just-transcribe" do
-  version "0.3.3"
-  sha256 "2bf8e04c596d5a03b9fde60fc91aa8eea95edc817c7aafe8ea113e8ab45a410b"
+  version "0.4.0"
+  sha256 "da6041ddd0e430ad84b661407507208caf20ab25adbde97292edaca5431a8a42"
 
   url "https://github.com/sondt2709/just-transcribe/releases/download/v#{version}/Just.Transcribe-#{version}-arm64.dmg"
   name "Just Transcribe"
